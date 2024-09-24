@@ -1,5 +1,5 @@
 import sys
-from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QSlider, QLabel, QHBoxLayout, QCheckBox, QPushButton, QGridLayout, QGraphicsView, QGraphicsScene, QGraphicsPixmapItem
+from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QSlider, QLabel, QHBoxLayout, QCheckBox, QPushButton, QGridLayout, QGraphicsView, QGraphicsScene, QGraphicsPixmapItem, QSpinBox
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QPainter, QPixmap
 from pyswip import Prolog
@@ -69,6 +69,24 @@ class MapGenerator(QWidget):
 		layout.addWidget(self.height_label)
 		layout.addWidget(self.height_slider)
 
+		# Ocean Count SpinBox
+		self.ocean_count_label = QLabel('Ocean Count: 1')
+		self.ocean_count_spinbox = QSpinBox()
+		self.ocean_count_spinbox.setRange(0, 100)
+		self.ocean_count_spinbox.setValue(1)  # Default value
+		self.ocean_count_spinbox.valueChanged.connect(self.update_labels)
+		layout.addWidget(self.ocean_count_label)
+		layout.addWidget(self.ocean_count_spinbox)
+
+		# Forest Count SpinBox
+		self.forest_count_label = QLabel('Forest Count: 1')
+		self.forest_count_spinbox = QSpinBox()
+		self.forest_count_spinbox.setRange(0, 100)
+		self.forest_count_spinbox.setValue(1)  # Default value
+		self.forest_count_spinbox.valueChanged.connect(self.update_labels)
+		layout.addWidget(self.forest_count_label)
+		layout.addWidget(self.forest_count_spinbox)
+
 		# Auto Adjust Checkbox
 		self.auto_adjust_checkbox = QCheckBox('Auto Adjust Sliders')
 		layout.addWidget(self.auto_adjust_checkbox)
@@ -109,14 +127,34 @@ class MapGenerator(QWidget):
 		elif self.auto_adjust_checkbox.isChecked():
 			remaining = 100 - total
 			if self.sender() == self.water_slider:
-				self.forest_slider.setValue(forest + remaining // 2)
-				self.land_slider.setValue(land + remaining // 2 + remaining % 2)
+				self.forest_slider.setValue(max(0, forest + remaining // 2))
+				self.land_slider.setValue(max(0, land + remaining // 2 + remaining % 2))
 			elif self.sender() == self.forest_slider:
-				self.water_slider.setValue(water + remaining // 2)
-				self.land_slider.setValue(land + remaining // 2 + remaining % 2)
+				self.water_slider.setValue(max(0, water + remaining // 2))
+				self.land_slider.setValue(max(0, land + remaining // 2 + remaining % 2))
 			elif self.sender() == self.land_slider:
-				self.water_slider.setValue(water + remaining // 2)
-				self.forest_slider.setValue(forest + remaining // 2 + remaining % 2)
+				self.water_slider.setValue(max(0, water + remaining // 2))
+				self.forest_slider.setValue(max(0, forest + remaining // 2 + remaining % 2))
+
+			if self.water_slider.value() == 100:
+				self.forest_slider.setValue(0)
+				self.land_slider.setValue(0)
+			elif self.forest_slider.value() == 100:
+				self.water_slider.setValue(0)
+				self.land_slider.setValue(0)
+			elif self.land_slider.value() == 100:
+				self.water_slider.setValue(0)
+				self.forest_slider.setValue(0)
+
+			#temporary solution				
+			total = self.water_slider.value() + self.forest_slider.value() + self.land_slider.value()
+			if total > 100:
+				if self.water_slider.value() < self.forest_slider.value() and self.water_slider.value() < self.land_slider.value():
+					self.water_slider.setValue(self.water_slider.value() - 1)
+				elif self.forest_slider.value() < self.water_slider.value() and self.forest_slider.value() < self.land_slider.value():
+					self.forest_slider.setValue(self.forest_slider.value() - 1)
+				else:
+					self.land_slider.setValue(self.land_slider.value() - 1)
 
 		self.water_label.setText(f'Water Percentage: {self.water_slider.value()}%')
 		self.forest_label.setText(f'Forest Percentage: {self.forest_slider.value()}%')
@@ -124,16 +162,8 @@ class MapGenerator(QWidget):
 		self.variance_label.setText(f'Variance: {self.variance_slider.value()}')
 		self.width_label.setText(f'Width: {self.width_slider.value()}')
 		self.height_label.setText(f'Height: {self.height_slider.value()}')
-
-		# The goal is to create a map which contains following element
-		#'Grass', 'Sand', 'Forest', 'Water' (and 'Ocean')
-
-		#Here are the rules, 
-		#Forest must be surrounded by grass
-		#If water exceed certain amount it becomes 'ocean', ocean must be surrounded by sand
-		#Forest cannot be immediately next to sand
-
-		#The map must be generated based on the percentage of each element
+		self.ocean_count_label.setText(f'Ocean Count: {self.ocean_count_spinbox.value()}')
+		self.forest_count_label.setText(f'Forest Count: {self.forest_count_spinbox.value()}')
 
 	def generate_map(self):
 		width = self.width_slider.value()
@@ -142,6 +172,11 @@ class MapGenerator(QWidget):
 		forest_percentage = self.forest_slider.value()
 		land_percentage = self.land_slider.value()
 		variance = self.variance_slider.value()
+		forest_count = self.forest_count_spinbox.value()
+		ocean_count = self.ocean_count_spinbox.value()
+
+		if water_percentage + forest_percentage + land_percentage != 100:
+			raise ValueError("The sum of water, forest, and land percentages must be 100.")
 
 		total_cells = width * height
 		water_cells = total_cells * water_percentage // 100
