@@ -1,19 +1,131 @@
 import sys
-from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QSlider, QLabel, QHBoxLayout, QCheckBox, QPushButton, QGridLayout, QGraphicsView, QGraphicsScene, QGraphicsPixmapItem, QSpinBox
+from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QSlider, QLabel, QHBoxLayout, QCheckBox, QPushButton, QGridLayout, QGraphicsView, QGraphicsScene, QGraphicsPixmapItem, QSpinBox, QLineEdit, QColorDialog, QFileDialog, QComboBox
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QPainter, QPixmap
 from pyswip import Prolog
 import random
-
+import json
 MAX_HEIGHT = 100
 MAX_WIDTH = 100
+
+class TileSet:
+	def __init__(self, name, traversal_cost, cannot_be_next_to, must_be_next_to, color, texture_path):
+		self.name = name
+		self.traversal_cost = traversal_cost
+		self.cannot_be_next_to = cannot_be_next_to
+		self.must_be_next_to = must_be_next_to
+		self.color = color
+		self.texture_path = texture_path
+
+	def to_dict(self):
+		return {
+			'name': self.name,
+			'traversal_cost': self.traversal_cost,
+			'cannot_be_next_to': self.cannot_be_next_to,
+			'must_be_next_to': self.must_be_next_to,
+			'color': self.color.name(),
+			'texture_path': self.texture_path
+		}
+
+	@staticmethod
+	def from_dict(data):
+		return TileSet(
+			data['name'],
+			data['traversal_cost'],
+			data['cannot_be_next_to'],
+			data['must_be_next_to'],
+			QColor(data['color']),
+			data['texture_path']
+		)
+
+class TileSetEditor(QWidget):
+	def __init__(self, tile_sets, parent=None):
+		super().__init__(parent)
+		self.tile_sets = tile_sets
+		self.initUI()
+
+	def initUI(self):
+		layout = QVBoxLayout()
+
+		self.tile_set_list = QComboBox()
+		self.tile_set_list.addItems([tile_set.name for tile_set in self.tile_sets])
+		self.tile_set_list.currentIndexChanged.connect(self.load_tile_set)
+		layout.addWidget(self.tile_set_list)
+
+		self.tile_set_name = QLineEdit()
+		self.tile_set_traversal_cost = QSpinBox()
+		self.tile_set_cannot_be_next_to = QLineEdit()
+		self.tile_set_must_be_next_to = QLineEdit()
+		self.tile_set_color = QPushButton('Select Color')
+		self.tile_set_texture_path = QLineEdit()
+		self.select_texture_button = QPushButton('Select Texture Path')
+
+		layout.addWidget(QLabel('Tile Name'))
+		layout.addWidget(self.tile_set_name)
+		layout.addWidget(QLabel('Traversal Cost'))
+		layout.addWidget(self.tile_set_traversal_cost)
+		layout.addWidget(QLabel('Cannot Be Next To'))
+		layout.addWidget(self.tile_set_cannot_be_next_to)
+		layout.addWidget(QLabel('Must Be Next To'))
+		layout.addWidget(self.tile_set_must_be_next_to)
+		layout.addWidget(QLabel('Color'))
+		layout.addWidget(self.tile_set_color)
+		layout.addWidget(QLabel('Texture Path'))
+		layout.addWidget(self.tile_set_texture_path)
+		layout.addWidget(self.select_texture_button)
+
+		self.tile_set_color.clicked.connect(self.select_color)
+		self.select_texture_button.clicked.connect(self.select_texture_path)
+
+		save_button = QPushButton('Save Changes')
+		save_button.clicked.connect(self.save_changes)
+		layout.addWidget(save_button)
+
+		self.setLayout(layout)
+		self.setWindowTitle('Edit Tile Sets')
+
+	def load_tile_set(self, index):
+		tile_set = self.tile_sets[index]
+		self.tile_set_name.setText(tile_set.name)
+		self.tile_set_traversal_cost.setValue(tile_set.traversal_cost)
+		self.tile_set_cannot_be_next_to.setText(','.join(tile_set.cannot_be_next_to))
+		self.tile_set_must_be_next_to.setText(','.join(tile_set.must_be_next_to))
+		self.tile_set_color.setStyleSheet(f'background-color: {tile_set.color.name()}')
+		self.tile_set_texture_path.setText(tile_set.texture_path)
+		self.selected_color = tile_set.color
+
+	def select_color(self):
+		color = QColorDialog.getColor()
+		if color.isValid():
+			self.tile_set_color.setStyleSheet(f'background-color: {color.name()}')
+			self.selected_color = color
+
+	def select_texture_path(self):
+		file_dialog = QFileDialog()
+		file_path, _ = file_dialog.getOpenFileName(self, "Select Texture Path", "", "Image Files (*.png *.jpg *.bmp)")
+		if file_path:
+			self.tile_set_texture_path.setText(file_path)
+
+	def save_changes(self):
+		index = self.tile_set_list.currentIndex()
+		tile_set = self.tile_sets[index]
+		tile_set.name = self.tile_set_name.text()
+		tile_set.traversal_cost = self.tile_set_traversal_cost.value()
+		tile_set.cannot_be_next_to = self.tile_set_cannot_be_next_to.text().split(',')
+		tile_set.must_be_next_to = self.tile_set_must_be_next_to.text().split(',')
+		tile_set.color = self.selected_color
+		tile_set.texture_path = self.tile_set_texture_path.text()
+		self.parent().save_tile_sets("tile_sets.json")
 
 class MapGenerator(QWidget):
 	def __init__(self):
 		super().__init__()
 
 		self.prolog = Prolog()
-		self.prolog.consult("map_rules.pl")
+		#self.prolog.consult("map_rules.pl")
+
+		self.tile_sets = []
+		self.load_tile_sets("tile_sets.json")
 
 		self.initUI()
 
@@ -105,6 +217,11 @@ class MapGenerator(QWidget):
 		self.map_display.setScene(self.scene)
 		layout.addWidget(self.map_display)
 
+		# Edit Tile Sets Button
+		edit_button = QPushButton('Edit Tile Sets')
+		edit_button.clicked.connect(self.open_tile_set_editor)
+		layout.addWidget(edit_button)
+
 		self.setLayout(layout)
 		self.setWindowTitle('Map Generator')
 
@@ -147,7 +264,7 @@ class MapGenerator(QWidget):
 				self.water_slider.setValue(0)
 				self.forest_slider.setValue(0)
 
-			#temporary solution                
+			# Temporary solution
 			total = self.water_slider.value() + self.forest_slider.value() + self.land_slider.value()
 			if total > 100:
 				if self.water_slider.value() < self.forest_slider.value() and self.water_slider.value() < self.land_slider.value():
@@ -184,7 +301,6 @@ class MapGenerator(QWidget):
 			raise ValueError("The sum of water, forest, and land percentages must be 100.")
 
 		# Query Prolog to generate the map
-		#query = f"generate_map({width}, {height}, {water_percentage}, {forest_percentage}, {land_percentage}, {ocean_count}, {forest_count}, Map)"
 		query = f"generate_map({width}, {height}, {water_percentage}, {forest_percentage}, {land_percentage}, Map)"
 		print(f"Prolog Query: {query}")
 		result = list(self.prolog.query(query))
@@ -194,7 +310,6 @@ class MapGenerator(QWidget):
 			self.display_map(map_data)
 		else:
 			print("No result from Prolog query")
-			# Additional debugging: print the map to see what was generated
 			self.prolog.query("print_map(Map)")
 
 	def display_map(self, map_data):
@@ -207,18 +322,52 @@ class MapGenerator(QWidget):
 		painter = QPainter(pixmap)
 		for y, row in enumerate(map_data):
 			for x, cell in enumerate(row):
-				color = QColor(0, 255, 0)
-				if cell == 'water':
-					color = QColor(0, 0, 255)
-				elif cell == 'forest':
-					color = QColor(0, 128, 0)
-				elif cell == 'sand':
-					color = QColor(255, 255, 0)
-				elif cell == 'ocean':
-					color = QColor(0, 0, 128)
+				tile_set = next((ts for ts in self.tile_sets if ts.name == cell), None)
+				if tile_set:
+					color = tile_set.color
+				else:
+					color = QColor(0, 0, 0)  # Default to black if tile set not found
 				painter.fillRect(x * cell_size, y * cell_size, cell_size, cell_size, color)
 		painter.end()
 		self.scene.addItem(QGraphicsPixmapItem(pixmap))
+
+	def open_tile_set_editor(self):
+		self.editor = TileSetEditor(self.tile_sets, self)
+		self.editor.show()
+
+	def select_color(self):
+		color = QColorDialog.getColor()
+		if color.isValid():
+			self.tile_set_color.setStyleSheet(f'background-color: {color.name()}')
+			self.selected_color = color
+
+	def select_texture_path(self):
+		file_dialog = QFileDialog()
+		file_path, _ = file_dialog.getOpenFileName(self, "Select Texture Path", "", "Image Files (*.png *.jpg *.bmp)")
+		if file_path:
+			self.tile_set_texture_path.setText(file_path)
+
+	def save_tile_sets(self, filename):
+		with open(filename, 'w') as file:
+			json.dump([tile_set.to_dict() for tile_set in self.tile_sets], file)
+
+	def load_tile_sets(self, filename):
+		try:
+			with open(filename, 'r') as file:
+				data = json.load(file)
+				self.tile_sets = [TileSet.from_dict(item) for item in data]
+		except FileNotFoundError:
+			print(f"Configuration file {filename} not found. Creating default configuration.")
+			self.tile_sets = self.create_default_tile_sets()
+			self.save_tile_sets(filename)
+
+	def create_default_tile_sets(self):
+		default_tile_sets = [
+			TileSet("water", 1, [], [], QColor(0, 0, 255), ""),
+			TileSet("forest", 2, [], [], QColor(0, 128, 0), ""),
+			TileSet("land", 1, [], [], QColor(255, 255, 0), "")
+		]
+		return default_tile_sets
 
 if __name__ == '__main__':
 	app = QApplication(sys.argv)
