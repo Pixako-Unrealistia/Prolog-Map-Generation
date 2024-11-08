@@ -9,12 +9,13 @@ MAX_HEIGHT = 100
 MAX_WIDTH = 100
 
 class TileSet:
-	def __init__(self, name, traversal_cost, cannot_be_next_to, must_be_next_to, color, texture_path):
+	def __init__(self, name, traversal_cost, cannot_be_next_to, must_be_next_to, color, discoverable, texture_path):
 		self.name = name
 		self.traversal_cost = traversal_cost
 		self.cannot_be_next_to = cannot_be_next_to
 		self.must_be_next_to = must_be_next_to
 		self.color = color
+		self.discoverable = discoverable
 		self.texture_path = texture_path
 
 	def to_dict(self):
@@ -24,6 +25,7 @@ class TileSet:
 			'cannot_be_next_to': self.cannot_be_next_to,
 			'must_be_next_to': self.must_be_next_to,
 			'color': self.color.name(),
+			'discoverable' : self.discoverable, # if this is true, then scroll bar in widget will appear
 			'texture_path': self.texture_path
 		}
 
@@ -35,6 +37,7 @@ class TileSet:
 			data['cannot_be_next_to'],
 			data['must_be_next_to'],
 			QColor(data['color']),
+			data['discoverable'],
 			data['texture_path']
 		)
 
@@ -183,24 +186,6 @@ class MapGenerator(QWidget):
 		layout.addWidget(self.height_label)
 		layout.addWidget(self.height_slider)
 
-		# Ocean Count SpinBox
-		self.ocean_count_label = QLabel('Ocean Count: 1')
-		self.ocean_count_spinbox = QSpinBox()
-		self.ocean_count_spinbox.setRange(0, 100)
-		self.ocean_count_spinbox.setValue(1)  # Default value
-		self.ocean_count_spinbox.valueChanged.connect(self.update_labels)
-		layout.addWidget(self.ocean_count_label)
-		layout.addWidget(self.ocean_count_spinbox)
-
-		# Forest Count SpinBox
-		self.forest_count_label = QLabel('Forest Count: 1')
-		self.forest_count_spinbox = QSpinBox()
-		self.forest_count_spinbox.setRange(0, 100)
-		self.forest_count_spinbox.setValue(1)  # Default value
-		self.forest_count_spinbox.valueChanged.connect(self.update_labels)
-		layout.addWidget(self.forest_count_label)
-		layout.addWidget(self.forest_count_spinbox)
-
 		# Auto Adjust Checkbox
 		self.auto_adjust_checkbox = QCheckBox('Auto Adjust Sliders')
 		layout.addWidget(self.auto_adjust_checkbox)
@@ -279,14 +264,16 @@ class MapGenerator(QWidget):
 		self.land_label.setText(f'Land Percentage: {self.land_slider.value()}%')
 		self.width_label.setText(f'Width: {self.width_slider.value()}')
 		self.height_label.setText(f'Height: {self.height_slider.value()}')
-		self.ocean_count_label.setText(f'Ocean Count: {self.ocean_count_spinbox.value()}')
-		self.forest_count_label.setText(f'Forest Count: {self.forest_count_spinbox.value()}')
 
 	def regenerate_seed(self):
-		result = list(self.prolog.query("random_seed(Seed)"))
-		if result:
-			seed = result[0]['Seed']
-			self.seed_label.setText(f'Seed: {seed}')
+		#result = list(self.prolog.query("random_seed(Seed)"))
+		#if result:
+		#	seed = result[0]['Seed']
+		#	self.seed_label.setText(f'Seed: {seed}')
+
+		# Temporary solution
+		seed = random.randint(0, 1000000)
+		self.seed_label.setText(f'Seed: {seed}')
 
 	def generate_map(self):
 		width = self.width_slider.value()
@@ -349,7 +336,7 @@ class MapGenerator(QWidget):
 
 	def save_tile_sets(self, filename):
 		with open(filename, 'w') as file:
-			json.dump([tile_set.to_dict() for tile_set in self.tile_sets], file)
+			json.dump([tile_set.to_dict() for tile_set in self.tile_sets], file, indent=4)
 
 	def load_tile_sets(self, filename):
 		try:
@@ -363,9 +350,11 @@ class MapGenerator(QWidget):
 
 	def create_default_tile_sets(self):
 		default_tile_sets = [
-			TileSet("water", 1, [], [], QColor(0, 0, 255), ""),
-			TileSet("forest", 2, [], [], QColor(0, 128, 0), ""),
-			TileSet("land", 1, [], [], QColor(255, 255, 0), "")
+			TileSet("water", 3, [], [], QColor(0, 0, 255), True ,""),
+			TileSet("deep_water", 5, ["sand", "forest", "land"], ["water"], QColor(0, 0, 128), False,""),
+			TileSet("forest", 2, [], [], QColor(0, 128, 0), True, ""),
+			TileSet("land", 1, [], [], QColor(255, 255, 0), True, ""),
+			TileSet("sand", 1, [], [], QColor(252, 255, 148), False, "")
 		]
 		return default_tile_sets
 
