@@ -196,11 +196,9 @@ class MapGenerator(QWidget):
 		self.map_display.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
 		self.map_display.setInteractive(True)
 		self.map_display.setViewportUpdateMode(QGraphicsView.FullViewportUpdate)
-		self.map_display.setScene(QGraphicsScene(self))
-		layout.addWidget(self.map_display)
-
-		self.scene = QGraphicsScene()
+		self.scene = QGraphicsScene(self)
 		self.map_display.setScene(self.scene)
+		layout.addWidget(self.map_display)
 
 		# Zoom In and Zoom Out Buttons
 		zoom_layout = QHBoxLayout()
@@ -212,6 +210,7 @@ class MapGenerator(QWidget):
 		self.zoom_out_button.clicked.connect(self.zoom_out)
 		zoom_layout.addWidget(self.zoom_out_button)
 
+		layout.addLayout(zoom_layout)
 
 		# Edit Tile Sets Button
 		edit_button = QPushButton('Edit Tile Sets')
@@ -242,12 +241,11 @@ class MapGenerator(QWidget):
 		self.width_label.setText(f'Width: {self.width_slider.value()}')
 		self.height_label.setText(f'Height: {self.height_slider.value()}')
 
-
 	def regenerate_seed(self):
 		#result = list(self.prolog.query("random_seed(Seed)"))
 		#if result:
-		#	seed = result[0]['Seed']
-		#	self.seed_label.setText(f'Seed: {seed}')
+		#    seed = result[0]['Seed']
+		#    self.seed_label.setText(f'Seed: {seed}')
 
 		# Temporary solution
 		seed = random.randint(0, 1000000)
@@ -284,21 +282,19 @@ class MapGenerator(QWidget):
 				if map_data[y][x] is None:
 					map_data[y][x] = last_tile_set
 
-		self.display_map(map_data)		
-
-
+		self.display_map(map_data)
 
 		# Query Prolog to generate the map (TO BE DONE)
 		#query = f"generate_map({width}, {height}, {percentages}, Map)"
 		#print(f"Prolog Query: {query}")
 		#result = list(self.prolog.query(query))
 		#if result:
-		#	map_data = result[0]['Map']
-		#	print("Generated Map Data:", map_data)
-		#	self.display_map(map_data)
+		#    map_data = result[0]['Map']
+		#    print("Generated Map Data:", map_data)
+		#    self.display_map(map_data)
 		#else:
-		#	print("No result from Prolog query")
-		#	self.prolog.query("print_map(Map)")
+		#    print("No result from Prolog query")
+		#    self.prolog.query("print_map(Map)")
 
 	def load_tile_sets(self, filename):
 		try:
@@ -364,7 +360,7 @@ class MapGenerator(QWidget):
 			TileSet("water", 3, [], [], QColor(0, 0, 255), True, "", 30),
 			TileSet("deep_water", 5, ["sand", "forest", "land"], ["water"], QColor(0, 0, 128), False, "", 0),
 			TileSet("forest", 2, [], [], QColor(0, 128, 0), True, "", 30),
-			TileSet("land", 1, [], [], QColor(0, 255, 0), True, "", 40),
+			TileSet("land", 1, [], [], QColor(255, 255, 0), True, "", 40),
 			TileSet("sand", 1, [], [], QColor(252, 255, 148), False, "", 0)
 		]
 		return default_tile_sets
