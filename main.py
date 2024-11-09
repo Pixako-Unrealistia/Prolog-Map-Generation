@@ -41,10 +41,36 @@ class TileSet:
 			data['texture_path']
 		)
 
+class GraphicViewOverloader(QGraphicsView):
+	def __init__(self, parent=None):
+		super().__init__(parent)
+		self.setRenderHint(QPainter.Antialiasing)
+		self.setDragMode(QGraphicsView.ScrollHandDrag)
+		self.setTransformationAnchor(QGraphicsView.AnchorUnderMouse)
+		self.setResizeAnchor(QGraphicsView.AnchorUnderMouse)
+		self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
+		self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
+		self.setInteractive(True)
+		self.setViewportUpdateMode(QGraphicsView.FullViewportUpdate)
+
+	def wheelEvent(self, event):
+		zoom_in_factor = 1.2
+		zoom_out_factor = 1 / zoom_in_factor
+
+		if event.angleDelta().y() > 0:
+			zoom_factor = zoom_in_factor
+		else:
+			zoom_factor = zoom_out_factor
+
+		self.scale(zoom_factor, zoom_factor)
+
+
+
 class TileSetEditor(QWidget):
 	def __init__(self, tile_sets, parent=None):
 		super().__init__(parent)
 		self.tile_sets = tile_sets
+		self.selected_color = None
 		self.initUI()
 
 	def initUI(self):
@@ -186,7 +212,7 @@ class MapGenerator(QWidget):
 		layout.addWidget(self.generate_button)
 
 		# Map Display
-		self.map_display = QGraphicsView()
+		self.map_display = GraphicViewOverloader()
 		self.map_display.setFixedSize(500, 500)
 		self.map_display.setRenderHint(QPainter.Antialiasing)
 		self.map_display.setDragMode(QGraphicsView.ScrollHandDrag)
@@ -327,7 +353,10 @@ class MapGenerator(QWidget):
 
 	def open_tile_set_editor(self):
 		self.editor = TileSetEditor(self.tile_sets, self)
+		self.editor.setWindowModality(Qt.ApplicationModal)
 		self.editor.show()
+		self.editor.raise_()
+		self.editor.activateWindow()
 
 	def select_color(self):
 		color = QColorDialog.getColor()
