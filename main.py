@@ -1,12 +1,12 @@
 import sys
-from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QSlider, QLabel, QHBoxLayout, QCheckBox, QPushButton, QGridLayout, QGraphicsView, QGraphicsScene, QGraphicsPixmapItem, QSpinBox, QLineEdit, QColorDialog, QFileDialog, QComboBox
+from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QSlider, QLabel, QHBoxLayout, QCheckBox, QPushButton, QGridLayout, QGraphicsView, QGraphicsScene, QGraphicsPixmapItem, QSpinBox, QLineEdit, QColorDialog, QFileDialog, QComboBox, QScrollArea
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QPainter, QPixmap
 from pyswip import Prolog
 import random
 import json
-MAX_HEIGHT = 100
-MAX_WIDTH = 100
+MAX_HEIGHT = 150
+MAX_WIDTH = 150
 
 class TileSet:
 	def __init__(self, name, traversal_cost, cannot_be_next_to, must_be_next_to, color, discoverable, texture_path):
@@ -135,32 +135,22 @@ class MapGenerator(QWidget):
 	def initUI(self):
 		layout = QVBoxLayout()
 
-		# Water Percentage Slider
-		self.water_label = QLabel('Water Percentage: 30%')
-		self.water_slider = QSlider(Qt.Horizontal)
-		self.water_slider.setRange(0, 100)
-		self.water_slider.setValue(30)  # Default value
-		self.water_slider.valueChanged.connect(self.update_labels)
-		layout.addWidget(self.water_label)
-		layout.addWidget(self.water_slider)
+		self.percentage_sliders = {}
+		self.percentage_labels = {}
+		total_percentage = 0
 
-		# Forest Percentage Slider
-		self.forest_label = QLabel('Forest Percentage: 30%')
-		self.forest_slider = QSlider(Qt.Horizontal)
-		self.forest_slider.setRange(0, 100)
-		self.forest_slider.setValue(30)  # Default value
-		self.forest_slider.valueChanged.connect(self.update_labels)
-		layout.addWidget(self.forest_label)
-		layout.addWidget(self.forest_slider)
-
-		# Land Percentage Slider
-		self.land_label = QLabel('Land Percentage: 40%')
-		self.land_slider = QSlider(Qt.Horizontal)
-		self.land_slider.setRange(0, 100)
-		self.land_slider.setValue(40)  # Default value
-		self.land_slider.valueChanged.connect(self.update_labels)
-		layout.addWidget(self.land_label)
-		layout.addWidget(self.land_slider)
+		for tile_set in self.tile_sets:
+			if not tile_set.discoverable:
+				continue
+			label = QLabel(f'{tile_set.name.capitalize()}')
+			slider = QSlider(Qt.Horizontal)
+			slider.setRange(0, 100)
+			slider.setValue(0)
+			slider.valueChanged.connect(self.update_labels)
+			layout.addWidget(label)
+			layout.addWidget(slider)
+			self.percentage_labels[tile_set.name] = label
+			self.percentage_sliders[tile_set.name] = slider
 
 		# Seed Label and Button
 		self.seed_label = QLabel('Seed: 0')
@@ -198,9 +188,30 @@ class MapGenerator(QWidget):
 		# Map Display
 		self.map_display = QGraphicsView()
 		self.map_display.setFixedSize(500, 500)
-		self.scene = QGraphicsScene(self)
-		self.map_display.setScene(self.scene)
+		self.map_display.setRenderHint(QPainter.Antialiasing)
+		self.map_display.setDragMode(QGraphicsView.ScrollHandDrag)
+		self.map_display.setTransformationAnchor(QGraphicsView.AnchorUnderMouse)
+		self.map_display.setResizeAnchor(QGraphicsView.AnchorUnderMouse)
+		self.map_display.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
+		self.map_display.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
+		self.map_display.setInteractive(True)
+		self.map_display.setViewportUpdateMode(QGraphicsView.FullViewportUpdate)
+		self.map_display.setScene(QGraphicsScene(self))
 		layout.addWidget(self.map_display)
+
+		self.scene = QGraphicsScene()
+		self.map_display.setScene(self.scene)
+
+		# Zoom In and Zoom Out Buttons
+		zoom_layout = QHBoxLayout()
+		self.zoom_in_button = QPushButton('Zoom In')
+		self.zoom_in_button.clicked.connect(self.zoom_in)
+		zoom_layout.addWidget(self.zoom_in_button)
+
+		self.zoom_out_button = QPushButton('Zoom Out')
+		self.zoom_out_button.clicked.connect(self.zoom_out)
+		zoom_layout.addWidget(self.zoom_out_button)
+
 
 		# Edit Tile Sets Button
 		edit_button = QPushButton('Edit Tile Sets')
@@ -210,60 +221,27 @@ class MapGenerator(QWidget):
 		self.setLayout(layout)
 		self.setWindowTitle('Map Generator')
 
-	def update_labels(self):
-		water = self.water_slider.value()
-		forest = self.forest_slider.value()
-		land = self.land_slider.value()
-		width = self.width_slider.value()
-		height = self.height_slider.value()
+	def zoom_in(self):
+		self.map_display.scale(1.2, 1.2)
 
-		total = water + forest + land
+	def zoom_out(self):
+		self.map_display.scale(1 / 1.2, 1 / 1.2)
+
+	def update_labels(self):
+		total = sum(slider.value() for slider in self.percentage_sliders.values())
 		if total > 100 and self.auto_adjust_checkbox.isChecked():
 			excess = total - 100
-			if self.sender() == self.water_slider:
-				self.water_slider.setValue(water - excess)
-			elif self.sender() == self.forest_slider:
-				self.forest_slider.setValue(forest - excess)
-			elif self.sender() == self.land_slider:
-				self.land_slider.setValue(land - excess)
+			for slider in self.percentage_sliders.values():
+				if slider.value() > excess:
+					slider.setValue(slider.value() - excess)
+					break
 
-		elif not self.auto_adjust_checkbox.isChecked():
-			remaining = 100 - total
-			if self.sender() == self.water_slider:
-				self.forest_slider.setValue(max(0, forest + remaining // 2))
-				self.land_slider.setValue(max(0, land + remaining // 2 + remaining % 2))
-			elif self.sender() == self.forest_slider:
-				self.water_slider.setValue(max(0, water + remaining // 2))
-				self.land_slider.setValue(max(0, land + remaining // 2 + remaining % 2))
-			elif self.sender() == self.land_slider:
-				self.water_slider.setValue(max(0, water + remaining // 2))
-				self.forest_slider.setValue(max(0, forest + remaining // 2 + remaining % 2))
+		for name, slider in self.percentage_sliders.items():
+			self.percentage_labels[name].setText(f'{name.capitalize()} Percentage: {slider.value()}%')
 
-			if self.water_slider.value() == 100:
-				self.forest_slider.setValue(0)
-				self.land_slider.setValue(0)
-			elif self.forest_slider.value() == 100:
-				self.water_slider.setValue(0)
-				self.land_slider.setValue(0)
-			elif self.land_slider.value() == 100:
-				self.water_slider.setValue(0)
-				self.forest_slider.setValue(0)
-
-			# Temporary solution
-			total = self.water_slider.value() + self.forest_slider.value() + self.land_slider.value()
-			if total > 100:
-				if self.water_slider.value() < self.forest_slider.value() and self.water_slider.value() < self.land_slider.value():
-					self.water_slider.setValue(self.water_slider.value() - 1)
-				elif self.forest_slider.value() < self.water_slider.value() and self.forest_slider.value() < self.land_slider.value():
-					self.forest_slider.setValue(self.forest_slider.value() - 1)
-				else:
-					self.land_slider.setValue(self.land_slider.value() - 1)
-
-		self.water_label.setText(f'Water Percentage: {self.water_slider.value()}%')
-		self.forest_label.setText(f'Forest Percentage: {self.forest_slider.value()}%')
-		self.land_label.setText(f'Land Percentage: {self.land_slider.value()}%')
 		self.width_label.setText(f'Width: {self.width_slider.value()}')
 		self.height_label.setText(f'Height: {self.height_slider.value()}')
+
 
 	def regenerate_seed(self):
 		#result = list(self.prolog.query("random_seed(Seed)"))
@@ -278,26 +256,59 @@ class MapGenerator(QWidget):
 	def generate_map(self):
 		width = self.width_slider.value()
 		height = self.height_slider.value()
-		water_percentage = self.water_slider.value()
-		forest_percentage = self.forest_slider.value()
-		land_percentage = self.land_slider.value()
-		forest_count = self.forest_count_spinbox.value()
-		ocean_count = self.ocean_count_spinbox.value()
+		percentages = {name: slider.value() for name, slider in self.percentage_sliders.items()}
 
-		if water_percentage + forest_percentage + land_percentage != 100:
-			raise ValueError("The sum of water, forest, and land percentages must be 100.")
+		if sum(percentages.values()) != 100:
+			raise ValueError("The sum of all percentages must be 100.")
 
-		# Query Prolog to generate the map
-		query = f"generate_map({width}, {height}, {water_percentage}, {forest_percentage}, {land_percentage}, Map)"
-		print(f"Prolog Query: {query}")
-		result = list(self.prolog.query(query))
-		if result:
-			map_data = result[0]['Map']
-			print("Generated Map Data:", map_data)
-			self.display_map(map_data)
-		else:
-			print("No result from Prolog query")
-			self.prolog.query("print_map(Map)")
+		# mock python, doesn't reflect anything
+		map_data = [[None for _ in range(width)] for _ in range(height)]
+		total_cells = width * height
+		remaining_cells = total_cells
+
+		for name, percentage in percentages.items():
+			num_cells = (percentage * total_cells) // 100
+			for _ in range(num_cells):
+				while True:
+					x = random.randint(0, width - 1)
+					y = random.randint(0, height - 1)
+					if map_data[y][x] is None:
+						map_data[y][x] = name
+						break
+			remaining_cells -= num_cells
+
+		# Fill remaining cells with the last tile set
+		last_tile_set = list(percentages.keys())[-1]
+		for y in range(height):
+			for x in range(width):
+				if map_data[y][x] is None:
+					map_data[y][x] = last_tile_set
+
+		self.display_map(map_data)		
+
+
+
+		# Query Prolog to generate the map (TO BE DONE)
+		#query = f"generate_map({width}, {height}, {percentages}, Map)"
+		#print(f"Prolog Query: {query}")
+		#result = list(self.prolog.query(query))
+		#if result:
+		#	map_data = result[0]['Map']
+		#	print("Generated Map Data:", map_data)
+		#	self.display_map(map_data)
+		#else:
+		#	print("No result from Prolog query")
+		#	self.prolog.query("print_map(Map)")
+
+	def load_tile_sets(self, filename):
+		try:
+			with open(filename, 'r') as file:
+				data = json.load(file)
+				self.tile_sets = [TileSet.from_dict(item) for item in data]
+		except FileNotFoundError:
+			print(f"Configuration file {filename} not found. Creating default configuration.")
+			self.tile_sets = self.create_default_tile_sets()
+			self.save_tile_sets(filename)
 
 	def display_map(self, map_data):
 		self.scene.clear()
@@ -350,13 +361,14 @@ class MapGenerator(QWidget):
 
 	def create_default_tile_sets(self):
 		default_tile_sets = [
-			TileSet("water", 3, [], [], QColor(0, 0, 255), True ,""),
-			TileSet("deep_water", 5, ["sand", "forest", "land"], ["water"], QColor(0, 0, 128), False,""),
-			TileSet("forest", 2, [], [], QColor(0, 128, 0), True, ""),
-			TileSet("land", 1, [], [], QColor(255, 255, 0), True, ""),
-			TileSet("sand", 1, [], [], QColor(252, 255, 148), False, "")
+			TileSet("water", 3, [], [], QColor(0, 0, 255), True, "", 30),
+			TileSet("deep_water", 5, ["sand", "forest", "land"], ["water"], QColor(0, 0, 128), False, "", 0),
+			TileSet("forest", 2, [], [], QColor(0, 128, 0), True, "", 30),
+			TileSet("land", 1, [], [], QColor(0, 255, 0), True, "", 40),
+			TileSet("sand", 1, [], [], QColor(252, 255, 148), False, "", 0)
 		]
 		return default_tile_sets
+
 
 if __name__ == '__main__':
 	app = QApplication(sys.argv)
