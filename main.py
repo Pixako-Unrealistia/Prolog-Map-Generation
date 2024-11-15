@@ -7,7 +7,8 @@ import random
 import json
 MAX_HEIGHT = 150
 MAX_WIDTH = 150
-
+MIN_HEIGHT = 5
+MIN_WIDTH = 5
 class TileSet:
 	def __init__(self, name, traversal_cost, cannot_be_next_to, must_be_next_to, color, discoverable, texture_path):
 		self.name = name
@@ -67,184 +68,184 @@ class GraphicViewOverloader(QGraphicsView):
 
 
 class TileSetEditor(QWidget):
-    def __init__(self, tile_sets, parent=None):
-        super().__init__(parent)
-        self.tile_sets = tile_sets
-        self.selected_color = None
-        self.initUI()
+	def __init__(self, tile_sets, parent=None):
+		super().__init__(parent)
+		self.tile_sets = tile_sets
+		self.selected_color = None
+		self.initUI()
 
-    def initUI(self):
-        main_layout = QVBoxLayout()
-        
-        # Create a scroll area for the entire editor
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_widget = QWidget()
-        layout = QVBoxLayout(scroll_widget)
+	def initUI(self):
+		main_layout = QVBoxLayout()
+		
+		# Create a scroll area for the entire editor
+		scroll_area = QScrollArea()
+		scroll_area.setWidgetResizable(True)
+		scroll_widget = QWidget()
+		layout = QVBoxLayout(scroll_widget)
 
-        # Tile Set Selection
-        selection_layout = QHBoxLayout()
-        self.tile_set_list = QComboBox()
-        self.tile_set_list.addItems([tile_set.name for tile_set in self.tile_sets])
-        self.tile_set_list.currentIndexChanged.connect(self.load_tile_set)
-        selection_layout.addWidget(QLabel('Select Tile Set:'))
-        selection_layout.addWidget(self.tile_set_list)
-        layout.addLayout(selection_layout)
+		# Tile Set Selection
+		selection_layout = QHBoxLayout()
+		self.tile_set_list = QComboBox()
+		self.tile_set_list.addItems([tile_set.name for tile_set in self.tile_sets])
+		self.tile_set_list.currentIndexChanged.connect(self.load_tile_set)
+		selection_layout.addWidget(QLabel('Select Tile Set:'))
+		selection_layout.addWidget(self.tile_set_list)
+		layout.addLayout(selection_layout)
 
-        # Grid layout for form fields
-        form_layout = QGridLayout()
-        current_row = 0
+		# Grid layout for form fields
+		form_layout = QGridLayout()
+		current_row = 0
 
-        # Name
-        form_layout.addWidget(QLabel('Tile Name:'), current_row, 0)
-        self.tile_set_name = QLineEdit()
-        form_layout.addWidget(self.tile_set_name, current_row, 1)
-        current_row += 1
+		# Name
+		form_layout.addWidget(QLabel('Tile Name:'), current_row, 0)
+		self.tile_set_name = QLineEdit()
+		form_layout.addWidget(self.tile_set_name, current_row, 1)
+		current_row += 1
 
-        # Traversal Cost
-        form_layout.addWidget(QLabel('Traversal Cost:'), current_row, 0)
-        self.tile_set_traversal_cost = QSpinBox()
-        self.tile_set_traversal_cost.setRange(1, 100)
-        form_layout.addWidget(self.tile_set_traversal_cost, current_row, 1)
-        current_row += 1
+		# Traversal Cost
+		form_layout.addWidget(QLabel('Traversal Cost:'), current_row, 0)
+		self.tile_set_traversal_cost = QSpinBox()
+		self.tile_set_traversal_cost.setRange(1, 100)
+		form_layout.addWidget(self.tile_set_traversal_cost, current_row, 1)
+		current_row += 1
 
-        # Cannot Be Next To
-        form_layout.addWidget(QLabel('Cannot Be Next To:'), current_row, 0)
-        self.tile_set_cannot_be_next_to = QLineEdit()
-        self.tile_set_cannot_be_next_to.setPlaceholderText("Enter comma-separated values")
-        form_layout.addWidget(self.tile_set_cannot_be_next_to, current_row, 1)
-        current_row += 1
+		# Cannot Be Next To
+		form_layout.addWidget(QLabel('Cannot Be Next To:'), current_row, 0)
+		self.tile_set_cannot_be_next_to = QLineEdit()
+		self.tile_set_cannot_be_next_to.setPlaceholderText("Enter comma-separated values")
+		form_layout.addWidget(self.tile_set_cannot_be_next_to, current_row, 1)
+		current_row += 1
 
-        # Must Be Next To
-        form_layout.addWidget(QLabel('Must Be Next To:'), current_row, 0)
-        self.tile_set_must_be_next_to = QLineEdit()
-        self.tile_set_must_be_next_to.setPlaceholderText("Enter comma-separated values")
-        form_layout.addWidget(self.tile_set_must_be_next_to, current_row, 1)
-        current_row += 1
+		# Must Be Next To
+		form_layout.addWidget(QLabel('Must Be Next To:'), current_row, 0)
+		self.tile_set_must_be_next_to = QLineEdit()
+		self.tile_set_must_be_next_to.setPlaceholderText("Enter comma-separated values")
+		form_layout.addWidget(self.tile_set_must_be_next_to, current_row, 1)
+		current_row += 1
 
-        # Color
-        form_layout.addWidget(QLabel('Color:'), current_row, 0)
-        color_layout = QHBoxLayout()
-        self.tile_set_color = QPushButton()
-        self.tile_set_color.setFixedSize(50, 25)
-        self.tile_set_color.clicked.connect(self.select_color)
-        self.color_hex = QLineEdit()
-        self.color_hex.setReadOnly(True)
-        color_layout.addWidget(self.tile_set_color)
-        color_layout.addWidget(self.color_hex)
-        form_layout.addLayout(color_layout, current_row, 1)
-        current_row += 1
+		# Color
+		form_layout.addWidget(QLabel('Color:'), current_row, 0)
+		color_layout = QHBoxLayout()
+		self.tile_set_color = QPushButton()
+		self.tile_set_color.setFixedSize(50, 25)
+		self.tile_set_color.clicked.connect(self.select_color)
+		self.color_hex = QLineEdit()
+		self.color_hex.setReadOnly(True)
+		color_layout.addWidget(self.tile_set_color)
+		color_layout.addWidget(self.color_hex)
+		form_layout.addLayout(color_layout, current_row, 1)
+		current_row += 1
 
-        # Discoverable
-        form_layout.addWidget(QLabel('Discoverable:'), current_row, 0)
-        self.tile_set_discoverable = QCheckBox()
-        form_layout.addWidget(self.tile_set_discoverable, current_row, 1)
-        current_row += 1
+		# Discoverable
+		form_layout.addWidget(QLabel('Discoverable:'), current_row, 0)
+		self.tile_set_discoverable = QCheckBox()
+		form_layout.addWidget(self.tile_set_discoverable, current_row, 1)
+		current_row += 1
 
-        # Texture Path
-        form_layout.addWidget(QLabel('Texture Path:'), current_row, 0)
-        texture_layout = QHBoxLayout()
-        self.tile_set_texture_path = QLineEdit()
-        self.select_texture_button = QPushButton('Browse...')
-        self.select_texture_button.clicked.connect(self.select_texture_path)
-        texture_layout.addWidget(self.tile_set_texture_path)
-        texture_layout.addWidget(self.select_texture_button)
-        form_layout.addLayout(texture_layout, current_row, 1)
+		# Texture Path
+		form_layout.addWidget(QLabel('Texture Path:'), current_row, 0)
+		texture_layout = QHBoxLayout()
+		self.tile_set_texture_path = QLineEdit()
+		self.select_texture_button = QPushButton('Browse...')
+		self.select_texture_button.clicked.connect(self.select_texture_path)
+		texture_layout.addWidget(self.tile_set_texture_path)
+		texture_layout.addWidget(self.select_texture_button)
+		form_layout.addLayout(texture_layout, current_row, 1)
 
-        layout.addLayout(form_layout)
+		layout.addLayout(form_layout)
 
-        # Buttons
-        button_layout = QHBoxLayout()
-        save_button = QPushButton('Save Changes')
-        save_button.clicked.connect(self.save_changes)
-        cancel_button = QPushButton('Cancel')
-        cancel_button.clicked.connect(self.close)
-        button_layout.addWidget(save_button)
-        button_layout.addWidget(cancel_button)
-        layout.addLayout(button_layout)
+		# Buttons
+		button_layout = QHBoxLayout()
+		save_button = QPushButton('Save Changes')
+		save_button.clicked.connect(self.save_changes)
+		cancel_button = QPushButton('Cancel')
+		cancel_button.clicked.connect(self.close)
+		button_layout.addWidget(save_button)
+		button_layout.addWidget(cancel_button)
+		layout.addLayout(button_layout)
 
-        # Add stretch to push everything to the top
-        layout.addStretch()
+		# Add stretch to push everything to the top
+		layout.addStretch()
 
-        scroll_area.setWidget(scroll_widget)
-        main_layout.addWidget(scroll_area)
-        self.setLayout(main_layout)
-        
-        # Set window properties
-        self.setWindowTitle('Edit Tile Sets')
-        self.setMinimumWidth(400)
-        self.setMinimumHeight(500)
-        
-        # Load the first tile set
-        if self.tile_sets:
-            self.load_tile_set(0)
+		scroll_area.setWidget(scroll_widget)
+		main_layout.addWidget(scroll_area)
+		self.setLayout(main_layout)
+		
+		# Set window properties
+		self.setWindowTitle('Edit Tile Sets')
+		self.setMinimumWidth(400)
+		self.setMinimumHeight(500)
+		
+		# Load the first tile set
+		if self.tile_sets:
+			self.load_tile_set(0)
 
-    def load_tile_set(self, index):
-        if index < 0 or index >= len(self.tile_sets):
-            return
-            
-        tile_set = self.tile_sets[index]
-        self.tile_set_name.setText(tile_set.name)
-        self.tile_set_traversal_cost.setValue(tile_set.traversal_cost)
-        self.tile_set_cannot_be_next_to.setText(','.join(tile_set.cannot_be_next_to))
-        self.tile_set_must_be_next_to.setText(','.join(tile_set.must_be_next_to))
-        self.selected_color = tile_set.color
-        self.update_color_display(tile_set.color)
-        self.tile_set_discoverable.setChecked(tile_set.discoverable)
-        self.tile_set_texture_path.setText(tile_set.texture_path)
+	def load_tile_set(self, index):
+		if index < 0 or index >= len(self.tile_sets):
+			return
+			
+		tile_set = self.tile_sets[index]
+		self.tile_set_name.setText(tile_set.name)
+		self.tile_set_traversal_cost.setValue(tile_set.traversal_cost)
+		self.tile_set_cannot_be_next_to.setText(','.join(tile_set.cannot_be_next_to))
+		self.tile_set_must_be_next_to.setText(','.join(tile_set.must_be_next_to))
+		self.selected_color = tile_set.color
+		self.update_color_display(tile_set.color)
+		self.tile_set_discoverable.setChecked(tile_set.discoverable)
+		self.tile_set_texture_path.setText(tile_set.texture_path)
 
-    def update_color_display(self, color):
-        self.tile_set_color.setStyleSheet(f'background-color: {color.name()}')
-        self.color_hex.setText(color.name())
+	def update_color_display(self, color):
+		self.tile_set_color.setStyleSheet(f'background-color: {color.name()}')
+		self.color_hex.setText(color.name())
 
-    def select_color(self):
-        color = QColorDialog.getColor(initial=self.selected_color)
-        if color.isValid():
-            self.selected_color = color
-            self.update_color_display(color)
+	def select_color(self):
+		color = QColorDialog.getColor(initial=self.selected_color)
+		if color.isValid():
+			self.selected_color = color
+			self.update_color_display(color)
 
-    def select_texture_path(self):
-        file_dialog = QFileDialog()
-        file_path, _ = file_dialog.getOpenFileName(
-            self, 
-            "Select Texture Path", 
-            "", 
-            "Image Files (*.png *.jpg *.bmp)"
-        )
-        if file_path:
-            self.tile_set_texture_path.setText(file_path)
+	def select_texture_path(self):
+		file_dialog = QFileDialog()
+		file_path, _ = file_dialog.getOpenFileName(
+			self, 
+			"Select Texture Path", 
+			"", 
+			"Image Files (*.png *.jpg *.bmp)"
+		)
+		if file_path:
+			self.tile_set_texture_path.setText(file_path)
 
-    def save_changes(self):
-        index = self.tile_set_list.currentIndex()
-        if index < 0 or index >= len(self.tile_sets):
-            return
+	def save_changes(self):
+		index = self.tile_set_list.currentIndex()
+		if index < 0 or index >= len(self.tile_sets):
+			return
 
-        tile_set = self.tile_sets[index]
-        
-        # Update tile set properties
-        tile_set.name = self.tile_set_name.text().strip()
-        tile_set.traversal_cost = self.tile_set_traversal_cost.value()
-        tile_set.cannot_be_next_to = [x.strip() for x in self.tile_set_cannot_be_next_to.text().split(',') if x.strip()]
-        tile_set.must_be_next_to = [x.strip() for x in self.tile_set_must_be_next_to.text().split(',') if x.strip()]
-        tile_set.color = self.selected_color
-        tile_set.discoverable = self.tile_set_discoverable.isChecked()
-        tile_set.texture_path = self.tile_set_texture_path.text().strip()
+		tile_set = self.tile_sets[index]
+		
+		# Update tile set properties
+		tile_set.name = self.tile_set_name.text().strip()
+		tile_set.traversal_cost = self.tile_set_traversal_cost.value()
+		tile_set.cannot_be_next_to = [x.strip() for x in self.tile_set_cannot_be_next_to.text().split(',') if x.strip()]
+		tile_set.must_be_next_to = [x.strip() for x in self.tile_set_must_be_next_to.text().split(',') if x.strip()]
+		tile_set.color = self.selected_color
+		tile_set.discoverable = self.tile_set_discoverable.isChecked()
+		tile_set.texture_path = self.tile_set_texture_path.text().strip()
 
-        # Update the combo box if name changed
-        current_text = self.tile_set_list.currentText()
-        if current_text != tile_set.name:
-            self.tile_set_list.setItemText(index, tile_set.name)
+		# Update the combo box if name changed
+		current_text = self.tile_set_list.currentText()
+		if current_text != tile_set.name:
+			self.tile_set_list.setItemText(index, tile_set.name)
 
-        # Save to JSON file
-        if hasattr(self.parent(), 'save_tile_sets'):
-            self.parent().save_tile_sets("tile_sets.json")
+		# Save to JSON file
+		if hasattr(self.parent(), 'save_tile_sets'):
+			self.parent().save_tile_sets("tile_sets.json")
 
 class MapGenerator(QWidget):
 	def __init__(self):
 		super().__init__()
 
 		self.prolog = Prolog()
-		#self.prolog.consult("map_rules.pl")
+		self.prolog.consult("map_rules2.pl")
 
 		self.tile_sets = []
 		self.load_tile_sets("tile_sets.json")
@@ -282,18 +283,18 @@ class MapGenerator(QWidget):
 		left_layout.addWidget(self.regenerate_button)
 
 		# Width and Height Sliders
-		self.width_label = QLabel(f'Width: {MAX_WIDTH}')
+		self.width_label = QLabel(f'Width: {MIN_WIDTH}')
 		self.width_slider = QSlider(Qt.Horizontal)
-		self.width_slider.setRange(5, MAX_WIDTH)
-		self.width_slider.setValue(MAX_WIDTH)
+		self.width_slider.setRange(MIN_WIDTH, MAX_WIDTH)
+		self.width_slider.setValue(MIN_WIDTH)
 		self.width_slider.valueChanged.connect(self.update_labels)
 		left_layout.addWidget(self.width_label)
 		left_layout.addWidget(self.width_slider)
 
-		self.height_label = QLabel(f'Height: {MAX_HEIGHT}')
+		self.height_label = QLabel(f'Height: {MIN_HEIGHT}')
 		self.height_slider = QSlider(Qt.Horizontal)
-		self.height_slider.setRange(5, MAX_HEIGHT)
-		self.height_slider.setValue(MAX_HEIGHT)
+		self.height_slider.setRange(MIN_HEIGHT, MAX_HEIGHT)
+		self.height_slider.setValue(MIN_HEIGHT)
 		self.height_slider.valueChanged.connect(self.update_labels)
 		left_layout.addWidget(self.height_label)
 		left_layout.addWidget(self.height_slider)
@@ -389,42 +390,19 @@ class MapGenerator(QWidget):
 		if sum(percentages.values()) != 100:
 			raise ValueError("The sum of all percentages must be 100.")
 
-		# mock python, doesn't reflect anything
-		map_data = [[None for _ in range(width)] for _ in range(height)]
-		total_cells = width * height
-		remaining_cells = total_cells
+		percentages_list = [f'{name}-{percentages[name]}' for name in percentages]
 
-		for name, percentage in percentages.items():
-			num_cells = (percentage * total_cells) // 100
-			for _ in range(num_cells):
-				while True:
-					x = random.randint(0, width - 1)
-					y = random.randint(0, height - 1)
-					if map_data[y][x] is None:
-						map_data[y][x] = name
-						break
-			remaining_cells -= num_cells
+		# Call Prolog to generate the map
+		query = f"generate_map({width}, {height}, [{', '.join(percentages_list)}], Map)"
+		result = list(self.prolog.query(query))
 
-		# Fill remaining cells with the last tile set
-		last_tile_set = list(percentages.keys())[-1]
-		for y in range(height):
-			for x in range(width):
-				if map_data[y][x] is None:
-					map_data[y][x] = last_tile_set
+		print(result)
 
-		self.display_map(map_data)
-
-		# Query Prolog to generate the map (TO BE DONE)
-		#query = f"generate_map({width}, {height}, {percentages}, Map)"
-		#print(f"Prolog Query: {query}")
-		#result = list(self.prolog.query(query))
-		#if result:
-		#    map_data = result[0]['Map']
-		#    print("Generated Map Data:", map_data)
-		#    self.display_map(map_data)
-		#else:
-		#    print("No result from Prolog query")
-		#    self.prolog.query("print_map(Map)")
+		if result:
+			map_data = result[0]['Map']
+			self.display_map(map_data)
+		else:
+			print("No result from Prolog query")
 
 	def load_tile_sets(self, filename):
 		try:
@@ -463,16 +441,20 @@ class MapGenerator(QWidget):
 		cell_size = min(self.map_display.width() // width, self.map_display.height() // height)
 		pixmap = QPixmap(self.map_display.width(), self.map_display.height())
 		pixmap.fill(Qt.white)
+		
 		painter = QPainter(pixmap)
-		for y, row in enumerate(map_data):
-			for x, cell in enumerate(row):
-				tile_set = next((ts for ts in self.tile_sets if ts.name == cell), None)
-				if tile_set:
-					color = tile_set.color
-				else:
-					color = QColor(0, 0, 0)  # Default to black if tile set not found
-				painter.fillRect(x * cell_size, y * cell_size, cell_size, cell_size, color)
-		painter.end()
+		try:
+			for y, row in enumerate(map_data):
+				for x, cell in enumerate(row):
+					tile_set = next((ts for ts in self.tile_sets if ts.name == cell), None)
+					if tile_set:
+						color = tile_set.color
+					else:
+						color = QColor(0, 0, 0)  # Default to black if tile set not found
+					painter.fillRect(x * cell_size, y * cell_size, cell_size, cell_size, color)
+		finally:
+			painter.end()
+		
 		self.scene.addItem(QGraphicsPixmapItem(pixmap))
 
 	def open_tile_set_editor(self):
