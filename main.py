@@ -141,15 +141,9 @@ class MapGenerator(QWidget):
         if len(self.pin_positions) < 2:
             self.pin_positions.append((x, y))
             print(f"Pin added at: {x}, {y}")
-            pin_item = QGraphicsPixmapItem()
-            pin_item.setPixmap(QPixmap(10, 10))
-            pin_item.pixmap().fill(Qt.blue)
-            pin_item.setPos(x, y)
-            self.scene.addItem(pin_item)
         if len(self.pin_positions) == 2:
             print("Both pins placed:", self.pin_positions)
             self.pin_positions.clear()  # Clear for next pinning action
-
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
