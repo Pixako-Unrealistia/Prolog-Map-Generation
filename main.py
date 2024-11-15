@@ -160,8 +160,10 @@ class MapGenerator(QWidget):
 		self.initUI()
 
 	def initUI(self):
-		layout = QVBoxLayout()
+		layout = QHBoxLayout()  # Change to QHBoxLayout for horizontal layout
 
+		# Left panel (controls)
+		left_layout = QVBoxLayout()
 		self.percentage_sliders = {}
 		self.percentage_labels = {}
 		total_percentage = 0
@@ -174,8 +176,8 @@ class MapGenerator(QWidget):
 			slider.setRange(0, 100)
 			slider.setValue(0)
 			slider.valueChanged.connect(self.update_labels)
-			layout.addWidget(label)
-			layout.addWidget(slider)
+			left_layout.addWidget(label)
+			left_layout.addWidget(slider)
 			self.percentage_labels[tile_set.name] = label
 			self.percentage_sliders[tile_set.name] = slider
 
@@ -183,8 +185,8 @@ class MapGenerator(QWidget):
 		self.seed_label = QLabel('Seed: 0')
 		self.regenerate_button = QPushButton('Regenerate Seed')
 		self.regenerate_button.clicked.connect(self.regenerate_seed)
-		layout.addWidget(self.seed_label)
-		layout.addWidget(self.regenerate_button)
+		left_layout.addWidget(self.seed_label)
+		left_layout.addWidget(self.regenerate_button)
 
 		# Width and Height Sliders
 		self.width_label = QLabel(f'Width: {MAX_WIDTH}')
@@ -192,27 +194,36 @@ class MapGenerator(QWidget):
 		self.width_slider.setRange(5, MAX_WIDTH)
 		self.width_slider.setValue(MAX_WIDTH)
 		self.width_slider.valueChanged.connect(self.update_labels)
-		layout.addWidget(self.width_label)
-		layout.addWidget(self.width_slider)
+		left_layout.addWidget(self.width_label)
+		left_layout.addWidget(self.width_slider)
 
 		self.height_label = QLabel(f'Height: {MAX_HEIGHT}')
 		self.height_slider = QSlider(Qt.Horizontal)
 		self.height_slider.setRange(5, MAX_HEIGHT)
 		self.height_slider.setValue(MAX_HEIGHT)
 		self.height_slider.valueChanged.connect(self.update_labels)
-		layout.addWidget(self.height_label)
-		layout.addWidget(self.height_slider)
+		left_layout.addWidget(self.height_label)
+		left_layout.addWidget(self.height_slider)
 
 		# Auto Adjust Checkbox
 		self.auto_adjust_checkbox = QCheckBox('Auto Adjust Sliders')
-		layout.addWidget(self.auto_adjust_checkbox)
+		left_layout.addWidget(self.auto_adjust_checkbox)
 
 		# Generate Button
 		self.generate_button = QPushButton('Generate Map')
 		self.generate_button.clicked.connect(self.generate_map)
-		layout.addWidget(self.generate_button)
+		left_layout.addWidget(self.generate_button)
 
-		# Map Display
+		# Edit Tile Sets Button
+		edit_button = QPushButton('Edit Tile Sets')
+		edit_button.clicked.connect(self.open_tile_set_editor)
+		left_layout.addWidget(edit_button)
+
+		# Add the left panel to the main layout
+		layout.addLayout(left_layout)
+
+		# Right panel (map display)
+		right_layout = QVBoxLayout()
 		self.map_display = GraphicViewOverloader()
 		self.map_display.setFixedSize(500, 500)
 		self.map_display.setRenderHint(QPainter.Antialiasing)
@@ -225,7 +236,7 @@ class MapGenerator(QWidget):
 		self.map_display.setViewportUpdateMode(QGraphicsView.FullViewportUpdate)
 		self.scene = QGraphicsScene(self)
 		self.map_display.setScene(self.scene)
-		layout.addWidget(self.map_display)
+		right_layout.addWidget(self.map_display)
 
 		# Zoom In and Zoom Out Buttons
 		zoom_layout = QHBoxLayout()
@@ -237,15 +248,14 @@ class MapGenerator(QWidget):
 		self.zoom_out_button.clicked.connect(self.zoom_out)
 		zoom_layout.addWidget(self.zoom_out_button)
 
-		layout.addLayout(zoom_layout)
+		right_layout.addLayout(zoom_layout)
 
-		# Edit Tile Sets Button
-		edit_button = QPushButton('Edit Tile Sets')
-		edit_button.clicked.connect(self.open_tile_set_editor)
-		layout.addWidget(edit_button)
+		# Add the right panel to the main layout
+		layout.addLayout(right_layout)
 
 		self.setLayout(layout)
 		self.setWindowTitle('Map Generator')
+
 
 	def zoom_in(self):
 		self.map_display.scale(1.2, 1.2)
