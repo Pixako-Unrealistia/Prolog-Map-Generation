@@ -1,7 +1,7 @@
 import sys
-from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QSlider, QLabel, QHBoxLayout, QCheckBox, QPushButton, QGridLayout, QGraphicsView, QGraphicsScene, QGraphicsPixmapItem, QSpinBox, QLineEdit, QColorDialog, QFileDialog, QComboBox, QScrollArea
+from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QSlider, QLabel, QHBoxLayout, QCheckBox, QPushButton, QGridLayout, QGraphicsView, QGraphicsScene, QGraphicsPixmapItem, QSpinBox, QLineEdit, QColorDialog, QFileDialog, QComboBox, QScrollArea, QGroupBox
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor, QPainter, QPixmap
+from PySide6.QtGui import QColor, QPainter, QPixmap, QPen
 from pyswip import Prolog
 import random
 import json
@@ -249,10 +249,16 @@ class MapGenerator(QWidget):
 		self.tile_sets = []
 		self.load_tile_sets("tile_sets.json")
 		self.json_to_prolog("tile_sets.json", "tile_sets.pl")
-
 		
 		self.prolog.consult("map_rules3.pl")
-
+		self.prolog.consult("pathfinding.pl")
+		
+		self.start_pos = None
+		self.end_pos = None
+		self.current_path = None
+		self.current_map_data = None
+		self.cell_size = None
+		
 		self.initUI()
 
 	def initUI(self):
@@ -310,6 +316,27 @@ class MapGenerator(QWidget):
 		self.generate_button.clicked.connect(self.generate_map)
 		left_layout.addWidget(self.generate_button)
 
+		# Add Pathfinding Controls
+		pathfinding_group = QGroupBox("Pathfinding Controls")
+		pathfinding_layout = QVBoxLayout()
+	
+		# Path Selection Mode
+		self.path_mode_checkbox = QCheckBox("Path Selection Mode")
+		self.path_mode_checkbox.setToolTip("When checked, click on the map to set start and end points")
+		pathfinding_layout.addWidget(self.path_mode_checkbox)
+		
+		# Clear Path Button
+		self.clear_path_button = QPushButton("Clear Path")
+		self.clear_path_button.clicked.connect(self.clear_path)
+		pathfinding_layout.addWidget(self.clear_path_button)
+		
+		# Path Cost Display
+		self.path_cost_label = QLabel("Path Cost: N/A")
+		pathfinding_layout.addWidget(self.path_cost_label)
+		
+		pathfinding_group.setLayout(pathfinding_layout)
+		left_layout.addWidget(pathfinding_group)
+
 		# Edit Tile Sets Button
 		edit_button = QPushButton('Edit Tile Sets')
 		edit_button.clicked.connect(self.open_tile_set_editor)
@@ -317,6 +344,12 @@ class MapGenerator(QWidget):
 
 		# Add the left panel to the main layout
 		layout.addLayout(left_layout)
+
+		 # Update map_display initialization
+		self.map_display = GraphicViewOverloader()
+		self.map_display.setFixedSize(500, 500)
+		self.map_display.setRenderHint(QPainter.Antialiasing)
+		self.map_display.mousePressEvent = self.handle_map_click
 
 		# Right panel (map display)
 		right_layout = QVBoxLayout()
@@ -352,6 +385,69 @@ class MapGenerator(QWidget):
 		self.setLayout(layout)
 		self.setWindowTitle('Map Generator')
 
+	def handle_map_click(self, event):
+		if not self.path_mode_checkbox.isChecked() or not self.current_map_data:
+			return
+			
+		view_pos = event.pos()
+		scene_pos = self.map_display.mapToScene(view_pos.toPoint())
+		x = int(scene_pos.x() / self.cell_size)
+		y = int(scene_pos.y() / self.cell_size)
+		
+		# Ensure click is within map bounds
+		if 0 <= x < len(self.current_map_data[0]) and 0 <= y < len(self.current_map_data):
+			if not self.start_pos:
+				self.start_pos = (x, y)
+				self.redraw_map()
+			elif not self.end_pos:
+				self.end_pos = (x, y)
+				self.find_and_draw_path()
+			else:
+				self.start_pos = (x, y)
+				self.end_pos = None
+				self.current_path = None
+				self.path_cost_label.setText("Path Cost: N/A")
+				self.redraw_map()
+
+	def find_and_draw_path(self):
+		if not self.start_pos or not self.end_pos or not self.current_map_data:
+			return
+			
+		# Convert map data to Prolog list format
+		map_str = str(self.current_map_data).replace("'", '"')
+		
+		# Create Prolog query
+		query = f"find_path({map_str}, {self.start_pos}, {self.end_pos}, Path)"
+		
+		try:
+			# Execute query
+			result = list(self.prolog.query(query))
+			
+			if result:
+				# Extract path from result
+				self.current_path = result[0]['Path']
+				
+				# Get path cost
+				cost_query = f"find_path_cost({str(self.current_path)}, {map_str}, Cost)"
+				cost_result = list(self.prolog.query(cost_query))
+				
+				if cost_result:
+					self.path_cost_label.setText(f"Path Cost: {cost_result[0]['Cost']}")
+				
+				self.redraw_map()
+			else:
+				self.path_cost_label.setText("No path found!")
+				
+		except Exception as e:
+			print(f"Error finding path: {e}")
+			self.path_cost_label.setText("Error finding path!")
+
+	def clear_path(self):
+		self.start_pos = None
+		self.end_pos = None
+		self.current_path = None
+		self.path_cost_label.setText("Path Cost: N/A")
+		self.redraw_map()
 
 	def zoom_in(self):
 		self.map_display.scale(1.2, 1.2)
@@ -437,23 +533,77 @@ class MapGenerator(QWidget):
 				f.write(fact)
 
 	def display_map(self, map_data):
+		self.current_map_data = map_data
+		self.redraw_map()
+
+	def redraw_map(self):
+		if not self.current_map_data:
+			return
+			
 		self.scene.clear()
-		width = self.width_slider.value()
-		height = self.height_slider.value()
-		cell_size = min(self.map_display.width() // width, self.map_display.height() // height)
-		pixmap = QPixmap(self.map_display.width(), self.map_display.height())
+		width = len(self.current_map_data[0])
+		height = len(self.current_map_data)
+		self.cell_size = min(self.map_display.width() // width, self.map_display.height() // height)
+		
+		pixmap = QPixmap(width * self.cell_size, height * self.cell_size)
 		pixmap.fill(Qt.white)
 		
 		painter = QPainter(pixmap)
 		try:
-			for y, row in enumerate(map_data):
+			# Draw tiles
+			for y, row in enumerate(self.current_map_data):
 				for x, cell in enumerate(row):
 					tile_set = next((ts for ts in self.tile_sets if ts.name == cell), None)
 					if tile_set:
 						color = tile_set.color
 					else:
-						color = QColor(0, 0, 0)  # Default to black if tile set not found
-					painter.fillRect(x * cell_size, y * cell_size, cell_size, cell_size, color)
+						color = QColor(0, 0, 0)
+					painter.fillRect(x * self.cell_size, y * self.cell_size, 
+								   self.cell_size, self.cell_size, color)
+			
+			# Draw start and end points
+			if self.start_pos:
+				painter.setBrush(QColor(255, 0, 0))  # Red for start
+				painter.setPen(Qt.NoPen)
+				painter.drawEllipse(
+					self.start_pos[0] * self.cell_size + self.cell_size//4,
+					self.start_pos[1] * self.cell_size + self.cell_size//4,
+					self.cell_size//2, self.cell_size//2
+				)
+			
+			if self.end_pos:
+				painter.setBrush(QColor(0, 255, 0))  # Green for end
+				painter.setPen(Qt.NoPen)
+				painter.drawEllipse(
+					self.end_pos[0] * self.cell_size + self.cell_size//4,
+					self.end_pos[1] * self.cell_size + self.cell_size//4,
+					self.cell_size//2, self.cell_size//2
+				)
+			
+			# Draw path
+			if self.current_path:
+				painter.setPen(QPen(QColor(255, 255, 255), self.cell_size//4))  # White path
+				for i in range(len(self.current_path) - 1):
+					x1, y1 = self.current_path[i]
+					x2, y2 = self.current_path[i + 1]
+					painter.drawLine(
+						x1 * self.cell_size + self.cell_size//2,
+						y1 * self.cell_size + self.cell_size//2,
+						x2 * self.cell_size + self.cell_size//2,
+						y2 * self.cell_size + self.cell_size//2
+					)
+				
+				# Draw path outline
+				painter.setPen(QPen(QColor(0, 0, 0), self.cell_size//4 + 2))  # Black outline
+				for i in range(len(self.current_path) - 1):
+					x1, y1 = self.current_path[i]
+					x2, y2 = self.current_path[i + 1]
+					painter.drawLine(
+						x1 * self.cell_size + self.cell_size//2,
+						y1 * self.cell_size + self.cell_size//2,
+						x2 * self.cell_size + self.cell_size//2,
+						y2 * self.cell_size + self.cell_size//2
+					)
 		finally:
 			painter.end()
 		
