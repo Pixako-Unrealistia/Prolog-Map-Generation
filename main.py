@@ -251,7 +251,7 @@ class MapGenerator(QWidget):
 		self.json_to_prolog("tile_sets.json", "tile_sets.pl")
 
 		
-		self.prolog.consult("map_rules2.pl")
+		self.prolog.consult("map_rules3.pl")
 
 		self.initUI()
 
