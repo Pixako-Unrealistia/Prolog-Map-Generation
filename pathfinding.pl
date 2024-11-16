@@ -1,123 +1,80 @@
-% Pathfinding module for map generator
-
-:- module(pathfinding, [find_path/4, find_path_cost/3]).
-:- use_module(library(heaps)).
 :- use_module(library(lists)).
 :- consult('tile_sets.pl').
 
-% Manhattan distance heuristic
-heuristic((X1,Y1), (X2,Y2), H) :-
-    DX is abs(X2-X1),
-    DY is abs(Y2-Y1),
-    H is DX + DY.
+% Define the neighboring cells (up, down, left, right).
+neighbors(X, Y, Width, Height, [(X1, Y), (X2, Y), (X, Y1), (X, Y2)]) :-
+    X1 is X - 1, X1 >= 0,
+    X2 is X + 1, X2 < Width,
+    Y1 is Y - 1, Y1 >= 0,
+    Y2 is Y + 1, Y2 < Height.
 
-% Get traversal cost for a tile type
-% Uses the tile_set/7 facts from tile_sets.pl
-get_tile_cost(Tile, Cost) :-
-    tile_set(Tile, Cost, _, _, _, _, _).
+% Find a path between two points using A* search.
+find_path(Map, Start, End, Path) :-
+    width(Map, Width),
+    height(Map, Height),
+    astar(Map, Width, Height, Start, End, Path).
 
-% Get tile at specific position in map
-get_map_tile(Map, (X,Y), Tile) :-
+% A* search implementation.
+astar(Map, Width, Height, Start, End, Path) :-
+    astar_search([[(Start, 0, [])]], End, Width, Height, Map, RevPath),
+    reverse(RevPath, Path).
+
+astar_search([[(_, _, Path)|_]], End, _, _, _, Path) :-  % Goal reached
+    Path = [(End, _) | _], !.
+
+astar_search([[(_, Cost, Path)|_], End, Width, Height, Map, FullPath):-  % Only calculate path from this node
+    Path = [(Current, _) | _],
+    findall((Neighbor, NewCost, [(Current, Cost)|Path]),
+       (expand_node(Map, Width, Height, Current, Cost, Neighbor, NewCost)),
+            Neighbors
+           ),
+    insert_all(Neighbors, [], NewOpenList),
+    astar_search(NewOpenList, End, Width, Height, Map, FullPath).
+
+astar_search([_|Rest], End, Width, Height, Map, Path):- % Path blocked, try another
+    astar_search(Rest, End, Width, Height, Map, Path).
+
+expand_node(Map, Width, Height, (X, Y), Cost, (NX, NY), NewCost) :-
+    neighbors(X, Y, Width, Height, Neighbors),
+    member((NX, NY), Neighbors),
+    \+ member((NX, NY), [(X,Y)]), % Avoid cycles by not considering previous node
+    cell(Map, NX, NY, Tile),
+    tile_set(Tile, TileCost, _, _, _, _, _),  % Get traversal cost from tile_sets.pl
+    NewCost is Cost + TileCost.
+
+insert_all([], L, L).
+insert_all([(Node, Cost, Path)|T], L, Res) :-
+    insert((Node, Cost, Path), L, L1),
+    insert_all(T, L1, Res).
+
+insert((Node, C, Path), [], [(_,C,Path)]):- !. % empty list case
+insert(X, [H|T], [H|NT]):-
+    H = (_, CostH, _),
+    X = (_, CostX, _),
+    CostH =< CostX, !, insert(X,T, NT). % sort based on F value
+
+insert(X, [H|T], [X, H|T]).
+
+
+
+% Get the width of the map.
+width(Map, Width) :-
+    Map = [Row|_],
+    length(Row, Width).
+
+% Get the height of the map.
+height(Map, Height) :-
+    length(Map, Height).
+
+% Get the tile at a specific cell.
+cell(Map, X, Y, Tile) :-
     nth0(Y, Map, Row),
     nth0(X, Row, Tile).
 
-% Check if position is within map bounds
-valid_pos(Map, (X,Y)) :-
-    length(Map, Height),
-    nth0(0, Map, FirstRow),
-    length(FirstRow, Width),
-    X >= 0, X < Width,
-    Y >= 0, Y < Height.
-
-% Get valid neighbors
-get_neighbors(Map, (X,Y), Neighbors) :-
-    Directions = [(0,1), (0,-1), (1,0), (-1,0)],
-    findall(
-        (NX,NY),
-        (
-            member((DX,DY), Directions),
-            NX is X + DX,
-            NY is Y + DY,
-            valid_pos(Map, (NX,NY)),
-            get_map_tile(Map, (NX,NY), Tile),
-            get_tile_cost(Tile, _)  % Ensure tile is traversable
-        ),
-        Neighbors
-    ).
-
-% Reconstruct path from came_from dictionary
-reconstruct_path(CameFrom, Current, [Current|Path]) :-
-    get_dict(Current, CameFrom, Parent),
-    reconstruct_path(CameFrom, Parent, Path), !.
-reconstruct_path(_, Current, [Current]).
-
-% Main pathfinding predicate
-find_path(Map, Start, Goal, Path) :-
-    empty_heap(OpenHeap),
-    heuristic(Start, Goal, H),
-    add_to_heap(OpenHeap, H, (Start,0,[Start]), InitialOpenHeap),
-    
-    % Create empty closed set
-    empty_assoc(ClosedSet),
-    
-    % Search for path
-    astar_search(Map, Goal, InitialOpenHeap, ClosedSet, Path).
-
-% A* search implementation
-astar_search(_, Goal, OpenHeap, _, Path) :-
-    get_from_heap(OpenHeap, _, (Goal,_,PathToGoal), _),
-    reverse(PathToGoal, Path).
-
-astar_search(Map, Goal, OpenHeap, ClosedSet, Path) :-
-    get_from_heap(OpenHeap, _, (Current,Cost,PathSoFar), RestHeap),
-    \+ get_assoc(Current, ClosedSet, _),
-    
-    % Get neighbors
-    get_neighbors(Map, Current, Neighbors),
-    
-    % Process each neighbor
-    process_neighbors(Map, Goal, Neighbors, Current, Cost, PathSoFar, RestHeap, ClosedSet, NewOpenHeap),
-    
-    % Add current to closed set
-    put_assoc(Current, ClosedSet, true, NewClosedSet),
-    
-    % Continue search
-    astar_search(Map, Goal, NewOpenHeap, NewClosedSet, Path).
-
-% Process neighbors
-process_neighbors(_, _, [], _, _, _, OpenHeap, _, OpenHeap).
-process_neighbors(Map, Goal, [Neighbor|Rest], Current, Cost, PathSoFar, OpenHeap, ClosedSet, FinalHeap) :-
-    % Calculate new cost
-    get_map_tile(Map, Neighbor, Tile),
-    get_tile_cost(Tile, TileCost),
-    NewCost is Cost + TileCost,
-    
-    % Calculate f-score
-    heuristic(Neighbor, Goal, H),
-    F is NewCost + H,
-    
-    % Add to open set if not in closed set
-    (get_assoc(Neighbor, ClosedSet, _) ->
-        NextHeap = OpenHeap
-    ;
-        append(PathSoFar, [Neighbor], NewPath),
-        add_to_heap(OpenHeap, F, (Neighbor,NewCost,NewPath), NextHeap)
-    ),
-    
-    % Process remaining neighbors
-    process_neighbors(Map, Goal, Rest, Current, Cost, PathSoFar, NextHeap, ClosedSet, FinalHeap).
-
-% Find total path cost
-find_path_cost(Path, Map, TotalCost) :-
-    path_cost(Path, Map, 0, TotalCost).
-
-path_cost([_], _, Cost, Cost) :- !.
-path_cost([Pos1,Pos2|Rest], Map, AccCost, TotalCost) :-
-    get_map_tile(Map, Pos2, Tile),
-    get_tile_cost(Tile, TileCost),
-    NewAccCost is AccCost + TileCost,
-    path_cost([Pos2|Rest], Map, NewAccCost, TotalCost).
-
-% Example usage:
-% ?- Map = [[water, land, forest], [land, water, land], [forest, land, water]], 
-%    find_path(Map, (0,0), (2,2), Path).
+% Function to calculate total path cost
+find_path_cost([], _, 0).
+find_path_cost([(X,Y)|Rest], Map, TotalCost):-
+    cell(Map, X, Y, Tile),
+    tile_set(Tile, TileCost, _, _, _, _, _),
+    find_path_cost(Rest, Map, RestCost),
+    TotalCost is TileCost + RestCost.
