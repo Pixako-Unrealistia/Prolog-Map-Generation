@@ -245,11 +245,13 @@ class MapGenerator(QWidget):
 		super().__init__()
 
 		self.prolog = Prolog()
-		self.prolog.consult("map_rules2.pl")
 
 		self.tile_sets = []
 		self.load_tile_sets("tile_sets.json")
 		self.json_to_prolog("tile_sets.json", "tile_sets.pl")
+
+		
+		self.prolog.consult("map_rules2.pl")
 
 		self.initUI()
 
@@ -479,24 +481,15 @@ class MapGenerator(QWidget):
 	def save_tile_sets(self, filename):
 		with open(filename, 'w') as file:
 			json.dump([tile_set.to_dict() for tile_set in self.tile_sets], file, indent=4)
-
-	def load_tile_sets(self, filename):
-		try:
-			with open(filename, 'r') as file:
-				data = json.load(file)
-				self.tile_sets = [TileSet.from_dict(item) for item in data]
-		except FileNotFoundError:
-			print(f"Configuration file {filename} not found. Creating default configuration.")
-			self.tile_sets = self.create_default_tile_sets()
-			self.save_tile_sets(filename)
+		self.json_to_prolog(filename, "tile_sets.pl")
 
 	def create_default_tile_sets(self):
 		default_tile_sets = [
-			TileSet("water", 3, [], [], QColor(0, 0, 255), True, "", 30),
-			TileSet("deep_water", 5, ["sand", "forest", "land"], ["water"], QColor(0, 0, 128), False, "", 0),
-			TileSet("forest", 2, [], [], QColor(0, 128, 0), True, "", 30),
-			TileSet("land", 1, [], [], QColor(255, 255, 0), True, "", 40),
-			TileSet("sand", 1, [], [], QColor(252, 255, 148), False, "", 0)
+			TileSet("water", 3, [], [], QColor(0, 0, 255), True, ""),
+			TileSet("deep_water", 5, ["sand", "forest", "land"], ["water"], QColor(0, 0, 128), False, ""),
+			TileSet("forest", 2, [], [], QColor(0, 128, 0), True, ""),
+			TileSet("land", 1, [], [], QColor(255, 255, 0), True, ""),
+			TileSet("sand", 1, [], [], QColor(252, 255, 148), False, "")
 		]
 		return default_tile_sets
 
