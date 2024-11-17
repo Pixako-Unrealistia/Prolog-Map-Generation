@@ -1,0 +1,57 @@
+[
+    {
+        "name": "water",
+        "traversal_cost": 3,
+        "cannot_be_next_to": [
+            "land"
+        ],
+        "must_be_next_to": [],
+        "color": "#0000ff",
+        "discoverable": true,
+        "texture_path": ""
+    },
+    {
+        "name": "deep_water",
+        "traversal_cost": 5,
+        "cannot_be_next_to": [
+            "sand",
+            "forest",
+            "land"
+        ],
+        "must_be_next_to": [
+            "water"
+        ],
+        "color": "#000080",
+        "discoverable": false,
+        "texture_path": ""
+    },
+    {
+        "name": "land",
+        "traversal_cost": 1,
+        "cannot_be_next_to": [],
+        "must_be_next_to": [],
+        "color": "#aa5500",
+        "discoverable": true,
+        "texture_path": ""
+    },
+    {
+        "name": "forest",
+        "traversal_cost": 2,
+        "cannot_be_next_to": [],
+        "must_be_next_to": [],
+        "color": "#008000",
+        "discoverable": true,
+        "texture_path": ""
+    },
+    {
+        "name": "sand",
+        "traversal_cost": 1,
+        "cannot_be_next_to": [],
+        "must_be_next_to": [
+            "water"
+        ],
+        "color": "#fcff94",
+        "discoverable": false,
+        "texture_path": ""
+    }
+]
