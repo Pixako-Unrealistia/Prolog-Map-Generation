@@ -1,5 +1,5 @@
 import sys
-from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QSlider, QLabel, QHBoxLayout, QCheckBox, QPushButton, QGridLayout, QGraphicsView, QGraphicsScene, QGraphicsPixmapItem, QSpinBox, QLineEdit, QColorDialog, QFileDialog, QComboBox, QScrollArea, QGroupBox
+from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QSlider, QLabel, QHBoxLayout, QCheckBox, QPushButton, QGridLayout, QGraphicsView, QGraphicsScene, QGraphicsPixmapItem, QSpinBox, QLineEdit, QColorDialog, QFileDialog, QComboBox, QScrollArea, QGroupBox, QRadioButton, QButtonGroup
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QPainter, QPixmap, QPen
 from pyswip import Prolog
@@ -250,6 +250,7 @@ class MapGenerator(QWidget):
 		self.load_tile_sets("tile_sets.json")
 		self.json_to_prolog("tile_sets.json", "tile_sets.pl")
 		
+		self.prolog.consult("map_rules2.pl")
 		self.prolog.consult("map_rules3.pl")
 		self.prolog.consult("pathfinding.pl")
 		
@@ -269,6 +270,18 @@ class MapGenerator(QWidget):
 		self.percentage_sliders = {}
 		self.percentage_labels = {}
 		total_percentage = 0
+
+		# Generation switch
+		method_label = QLabel('Generation Method:')
+		self.perlin_radio = QRadioButton('Perlin Noise')
+		self.random_radio = QRadioButton('Pure Random')
+		self.perlin_radio.setChecked(True)  # Set Perlin as default
+		method_group = QButtonGroup(self)
+		method_group.addButton(self.perlin_radio)
+		method_group.addButton(self.random_radio)
+		left_layout.addWidget(method_label)
+		left_layout.addWidget(self.perlin_radio)
+		left_layout.addWidget(self.random_radio)
 
 		for tile_set in self.tile_sets:
 			if not tile_set.discoverable:
@@ -345,7 +358,7 @@ class MapGenerator(QWidget):
 		# Add the left panel to the main layout
 		layout.addLayout(left_layout)
 
-		 # Update map_display initialization
+		# Update map_display initialization
 		self.map_display = GraphicViewOverloader()
 		self.map_display.setFixedSize(500, 500)
 		self.map_display.setRenderHint(QPainter.Antialiasing)
@@ -491,7 +504,11 @@ class MapGenerator(QWidget):
 		percentages_list = [f'{name}-{percentages[name]}' for name in percentages]
 
 		# Call Prolog to generate the map
-		query = f"generate_map({width}, {height}, [{', '.join(percentages_list)}], Map)"
+		if self.perlin_radio.isChecked():
+			query = f"generate_map({width}, {height}, [{', '.join(percentages_list)}], Map)"
+		else:
+			query = f"legacy_generate_map({width}, {height}, [{', '.join(percentages_list)}], Map)"
+
 		result = list(self.prolog.query(query))
 
 		print(result)
@@ -559,7 +576,7 @@ class MapGenerator(QWidget):
 					else:
 						color = QColor(0, 0, 0)
 					painter.fillRect(x * self.cell_size, y * self.cell_size, 
-								   self.cell_size, self.cell_size, color)
+								self.cell_size, self.cell_size, color)
 			
 			# Draw start and end points
 			if self.start_pos:
