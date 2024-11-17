@@ -42,6 +42,30 @@ class TileSet:
 			data['texture_path']
 		)
 
+class TileStructure:
+	# Each member must know its neighbors of every direction
+	def __init__(self, name, north=None, south=None, east=None, west=None):
+		self.name = name
+		self.north = north
+		self.south = south
+		self.east = east
+		self.west = west
+
+	def __str__(self):
+		return self.name
+
+	def __repr__(self):
+		return self.name
+
+	def __eq__(self, other):
+		return self.name == other.name
+
+	def assign_neighbors(self, north, south, east, west):
+		self.north = north
+		self.south = south
+		self.east = east
+		self.west = west
+
 class GraphicViewOverloader(QGraphicsView):
 	def __init__(self, parent=None):
 		super().__init__(parent)
@@ -64,8 +88,6 @@ class GraphicViewOverloader(QGraphicsView):
 			zoom_factor = zoom_out_factor
 
 		self.scale(zoom_factor, zoom_factor)
-
-
 
 class TileSetEditor(QWidget):
 	def __init__(self, tile_sets, parent=None):
@@ -652,11 +674,11 @@ class MapGenerator(QWidget):
 
 	def create_default_tile_sets(self):
 		default_tile_sets = [
-			TileSet("water", 3, [], [], QColor(0, 0, 255), True, ""),
+			TileSet("water", 3, ["land"], [], QColor(0, 0, 255), True, ""),
 			TileSet("deep_water", 5, ["sand", "forest", "land"], ["water"], QColor(0, 0, 128), False, ""),
+			TileSet("land", 1, [], [], QColor(170, 85, 0), True, ""),
 			TileSet("forest", 2, [], [], QColor(0, 128, 0), True, ""),
-			TileSet("land", 1, [], [], QColor(255, 255, 0), True, ""),
-			TileSet("sand", 1, [], [], QColor(252, 255, 148), False, "")
+			TileSet("sand", 1, [], ["water"], QColor(252, 255, 148), False, "")
 		]
 		return default_tile_sets
 
