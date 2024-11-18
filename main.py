@@ -66,17 +66,41 @@ class TileStructure:
 		self.east = east
 		self.west = west
 
+
 class GraphicViewOverloader(QGraphicsView):
 	def __init__(self, parent=None):
 		super().__init__(parent)
 		self.setRenderHint(QPainter.Antialiasing)
-		self.setDragMode(QGraphicsView.ScrollHandDrag)
 		self.setTransformationAnchor(QGraphicsView.AnchorUnderMouse)
 		self.setResizeAnchor(QGraphicsView.AnchorUnderMouse)
 		self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
 		self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
 		self.setInteractive(True)
 		self.setViewportUpdateMode(QGraphicsView.FullViewportUpdate)
+		self.drag_active = False
+		self.last_pos = None
+
+	def mousePressEvent(self, event):
+		if hasattr(self.parent(), 'path_mode_checkbox') and self.parent().path_mode_checkbox.isChecked():
+			# Forward the event to the parent's handle_map_click
+			if hasattr(self.parent(), 'handle_map_click'):
+				self.parent().handle_map_click(event)
+		else:
+			# Enable dragging
+			self.setDragMode(QGraphicsView.ScrollHandDrag)
+			self.drag_active = True
+			self.last_pos = event.position()
+			super().mousePressEvent(event)
+
+	def mouseReleaseEvent(self, event):
+		if self.drag_active:
+			self.setDragMode(QGraphicsView.NoDrag)
+			self.drag_active = False
+			super().mouseReleaseEvent(event)
+
+	def mouseMoveEvent(self, event):
+		if self.drag_active:
+			super().mouseMoveEvent(event)
 
 	def wheelEvent(self, event):
 		zoom_in_factor = 1.2
@@ -424,8 +448,10 @@ class MapGenerator(QWidget):
 		if not self.path_mode_checkbox.isChecked() or not self.current_map_data:
 			return
 			
-		view_pos = event.pos()
+		# Use position() instead of pos() and handle QPointF directly
+		view_pos = event.position()
 		scene_pos = self.map_display.mapToScene(view_pos.toPoint())
+		
 		x = int(scene_pos.x() / self.cell_size)
 		y = int(scene_pos.y() / self.cell_size)
 		
