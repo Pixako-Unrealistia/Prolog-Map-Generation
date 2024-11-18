@@ -7,8 +7,8 @@ import random
 import json
 MAX_HEIGHT = 150
 MAX_WIDTH = 150
-MIN_HEIGHT = 5
-MIN_WIDTH = 5
+MIN_HEIGHT = 50
+MIN_WIDTH = 50
 class TileSet:
 	def __init__(self, name, traversal_cost, cannot_be_next_to, must_be_next_to, color, discoverable, texture_path):
 		self.name = name
@@ -591,9 +591,120 @@ class MapGenerator(QWidget):
 
 		if result:
 			map_data = result[0]['Map']
+			if self.perlin_radio.isChecked():
+				map_data = self.correct_map(map_data)
 			self.display_map(map_data)
 		else:
 			print("No result from Prolog query")
+
+	def correct_map(self, map_data):
+		height = len(map_data)
+		width = len(map_data[0])
+		corrected_map = [row[:] for row in map_data]
+		for y in range(height):
+			for x in range(width):
+				current_tile_name = corrected_map[y][x]
+				current_tile_set = next((ts for ts in self.tile_sets if ts.name == current_tile_name), None)
+				if not current_tile_set:
+					continue
+				neighbor_positions = []
+				if y > 0:
+					neighbor_positions.append((x, y - 1))
+				if y < height - 1:
+					neighbor_positions.append((x, y + 1))
+				if x > 0:
+					neighbor_positions.append((x - 1, y))
+				if x < width - 1:
+					neighbor_positions.append((x + 1, y))
+				neighbors = [corrected_map[ny][nx] for nx, ny in neighbor_positions]
+
+				# Check 'Cannot Be Next To' constraints
+				invalid_neighbor = any(
+					neighbor in current_tile_set.cannot_be_next_to
+					for neighbor in neighbors
+				)
+				if invalid_neighbor:
+					suitable_tile_found = False
+					# Try non-discoverable tiles
+					for border_tile in self.tile_sets:
+						if not border_tile.discoverable:
+							border_invalid = any(
+								neighbor in border_tile.cannot_be_next_to
+								for neighbor in neighbors
+							) or (
+								border_tile.must_be_next_to and not any(
+									neighbor in border_tile.must_be_next_to
+									for neighbor in neighbors
+								)
+							)
+							if not border_invalid:
+								corrected_map[y][x] = border_tile.name
+								suitable_tile_found = True
+								break
+					# Try discoverable tiles
+					if not suitable_tile_found:
+						for ts in self.tile_sets:
+							ts_invalid = any(
+								neighbor in ts.cannot_be_next_to
+								for neighbor in neighbors
+							) or (
+								ts.must_be_next_to and not any(
+									neighbor in ts.must_be_next_to
+									for neighbor in neighbors
+								)
+							)
+							if not ts_invalid:
+								corrected_map[y][x] = ts.name
+								suitable_tile_found = True
+								break
+					# If no tile is found, leave the tile unchanged
+					if not suitable_tile_found:
+						corrected_map[y][x] = current_tile_name
+
+				# Check 'Must Be Next To' constraints
+				elif current_tile_set.must_be_next_to:
+					must_have_neighbor = any(
+						neighbor in current_tile_set.must_be_next_to
+						for neighbor in neighbors
+					)
+					if not must_have_neighbor:
+						suitable_tile_found = False
+						# Try non-discoverable tiles
+						for border_tile in self.tile_sets:
+							if not border_tile.discoverable:
+								border_invalid = any(
+									neighbor in border_tile.cannot_be_next_to
+									for neighbor in neighbors
+								) or (
+									border_tile.must_be_next_to and not any(
+										neighbor in border_tile.must_be_next_to
+										for neighbor in neighbors
+									)
+								)
+								if not border_invalid:
+									corrected_map[y][x] = border_tile.name
+									suitable_tile_found = True
+									break
+						# Try discoverable tiles
+						if not suitable_tile_found:
+							for ts in self.tile_sets:
+								ts_invalid = any(
+									neighbor in ts.cannot_be_next_to
+									for neighbor in neighbors
+								) or (
+									ts.must_be_next_to and not any(
+										neighbor in ts.must_be_next_to
+										for neighbor in neighbors
+									)
+								)
+								if not ts_invalid:
+									corrected_map[y][x] = ts.name
+									suitable_tile_found = True
+									break
+						# If no tile is found, leave the tile unchanged
+						if not suitable_tile_found:
+							corrected_map[y][x] = current_tile_name
+		return corrected_map
 
 	def load_tile_sets(self, filename):
 		try:
