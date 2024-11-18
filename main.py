@@ -1,5 +1,5 @@
 import sys
-from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QSlider, QLabel, QHBoxLayout, QCheckBox, QPushButton, QGridLayout, QGraphicsView, QGraphicsScene, QGraphicsPixmapItem, QSpinBox, QLineEdit, QColorDialog, QFileDialog, QComboBox, QScrollArea, QGroupBox, QRadioButton, QButtonGroup
+from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QSlider, QLabel, QHBoxLayout, QCheckBox, QPushButton, QGridLayout, QGraphicsView, QGraphicsScene, QGraphicsPixmapItem, QSpinBox, QLineEdit, QColorDialog, QFileDialog, QComboBox, QScrollArea, QGroupBox, QRadioButton, QButtonGroup, QMessageBox
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QPainter, QPixmap, QPen
 from pyswip import Prolog
@@ -118,6 +118,7 @@ class TileSetEditor(QWidget):
 		super().__init__(parent)
 		self.tile_sets = tile_sets
 		self.selected_color = None
+		self.is_new_tile = False
 		self.initUI()
 
 	def initUI(self):
@@ -202,10 +203,13 @@ class TileSetEditor(QWidget):
 
 		# Buttons
 		button_layout = QHBoxLayout()
+		new_button = QPushButton('New Tile')
+		new_button.clicked.connect(self.new_tile)
 		save_button = QPushButton('Save Changes')
 		save_button.clicked.connect(self.save_changes)
 		cancel_button = QPushButton('Cancel')
-		cancel_button.clicked.connect(self.close)
+		cancel_button.clicked.connect(self.close_overwrite)
+		button_layout.addWidget(new_button)
 		button_layout.addWidget(save_button)
 		button_layout.addWidget(cancel_button)
 		layout.addLayout(button_layout)
@@ -227,18 +231,26 @@ class TileSetEditor(QWidget):
 			self.load_tile_set(0)
 
 	def load_tile_set(self, index):
-		if index < 0 or index >= len(self.tile_sets):
-			return
-			
-		tile_set = self.tile_sets[index]
-		self.tile_set_name.setText(tile_set.name)
-		self.tile_set_traversal_cost.setValue(tile_set.traversal_cost)
-		self.tile_set_cannot_be_next_to.setText(','.join(tile_set.cannot_be_next_to))
-		self.tile_set_must_be_next_to.setText(','.join(tile_set.must_be_next_to))
-		self.selected_color = tile_set.color
-		self.update_color_display(tile_set.color)
-		self.tile_set_discoverable.setChecked(tile_set.discoverable)
-		self.tile_set_texture_path.setText(tile_set.texture_path)
+		if index >= 0 and index < len(self.tile_sets):
+			self.is_new_tile = False
+			tile_set = self.tile_sets[index]
+			self.tile_set_name.setText(tile_set.name)
+			self.tile_set_traversal_cost.setValue(tile_set.traversal_cost)
+			self.tile_set_cannot_be_next_to.setText(','.join(tile_set.cannot_be_next_to))
+			self.tile_set_must_be_next_to.setText(','.join(tile_set.must_be_next_to))
+			self.selected_color = tile_set.color
+			self.update_color_display(tile_set.color)
+			self.tile_set_discoverable.setChecked(tile_set.discoverable)
+			self.tile_set_texture_path.setText(tile_set.texture_path)
+		else:
+			self.tile_set_name.clear()
+			self.tile_set_traversal_cost.setValue(1)
+			self.tile_set_cannot_be_next_to.clear()
+			self.tile_set_must_be_next_to.clear()
+			self.selected_color = QColor(0, 0, 0)
+			self.update_color_display(self.selected_color)
+			self.tile_set_discoverable.setChecked(False)
+			self.tile_set_texture_path.clear()
 
 	def update_color_display(self, color):
 		self.tile_set_color.setStyleSheet(f'background-color: {color.name()}')
@@ -261,31 +273,91 @@ class TileSetEditor(QWidget):
 		if file_path:
 			self.tile_set_texture_path.setText(file_path)
 
+	def new_tile(self):
+		self.tile_set_name.clear()
+		self.tile_set_traversal_cost.setValue(1)
+		self.tile_set_cannot_be_next_to.clear()
+		self.tile_set_must_be_next_to.clear()
+		self.selected_color = QColor(0, 0, 0)
+		self.update_color_display(self.selected_color)
+		self.tile_set_discoverable.setChecked(False)
+		self.tile_set_texture_path.clear()
+
+		self.is_new_tile = True
+
+		self.tile_set_list.blockSignals(True)
+		self.tile_set_list.setCurrentIndex(-1)
+		self.tile_set_list.blockSignals(False)
+
+	def close_overwrite(self):
+		if hasattr(self.parent(), 'refresh_ui'):
+			self.parent().refresh_ui()
+		self.close()
+
 	def save_changes(self):
-		index = self.tile_set_list.currentIndex()
-		if index < 0 or index >= len(self.tile_sets):
+		# Get data from input fields
+		name = self.tile_set_name.text().strip()
+		if not name:
+			QMessageBox.warning(self, "Validation Error", "Tile name cannot be empty.")
 			return
 
-		tile_set = self.tile_sets[index]
-		
-		# Update tile set properties
-		tile_set.name = self.tile_set_name.text().strip()
-		tile_set.traversal_cost = self.tile_set_traversal_cost.value()
-		tile_set.cannot_be_next_to = [x.strip() for x in self.tile_set_cannot_be_next_to.text().split(',') if x.strip()]
-		tile_set.must_be_next_to = [x.strip() for x in self.tile_set_must_be_next_to.text().split(',') if x.strip()]
-		tile_set.color = self.selected_color
-		tile_set.discoverable = self.tile_set_discoverable.isChecked()
-		tile_set.texture_path = self.tile_set_texture_path.text().strip()
+		traversal_cost = self.tile_set_traversal_cost.value()
+		cannot_be_next_to = [x.strip() for x in self.tile_set_cannot_be_next_to.text().split(',') if x.strip()]
+		must_be_next_to = [x.strip() for x in self.tile_set_must_be_next_to.text().split(',') if x.strip()]
+		color = self.selected_color
+		discoverable = self.tile_set_discoverable.isChecked()
+		texture_path = self.tile_set_texture_path.text().strip()
 
-		# Update the combo box if name changed
-		current_text = self.tile_set_list.currentText()
-		if current_text != tile_set.name:
-			self.tile_set_list.setItemText(index, tile_set.name)
+		# Check for unique tile name
+		existing_names = [ts.name for ts in self.tile_sets]
+		if self.is_new_tile and name in existing_names:
+			QMessageBox.warning(self, "Validation Error", "Tile name must be unique.")
+			return
+
+		if getattr(self, 'is_new_tile', False):
+			# Create a new TileSet instance
+			new_tile_set = TileSet(
+				name,
+				traversal_cost,
+				cannot_be_next_to,
+				must_be_next_to,
+				color,
+				discoverable,
+				texture_path
+			)
+			# Add the new tile set to the list
+			self.tile_sets.append(new_tile_set)
+			# Update the tile set combo box
+			self.tile_set_list.addItem(name)
+			index = self.tile_set_list.count() - 1
+			self.tile_set_list.setCurrentIndex(index)
+			self.is_new_tile = False
+		else:
+			# Update existing tile set
+			index = self.tile_set_list.currentIndex()
+			if index < 0 or index >= len(self.tile_sets):
+				QMessageBox.warning(self, "Selection Error", "No tile set selected.")
+				return
+
+			tile_set = self.tile_sets[index]
+
+			# Update tile set properties
+			tile_set.name = name
+			tile_set.traversal_cost = traversal_cost
+			tile_set.cannot_be_next_to = cannot_be_next_to
+			tile_set.must_be_next_to = must_be_next_to
+			tile_set.color = color
+			tile_set.discoverable = discoverable
+			tile_set.texture_path = texture_path
+
+			# Update the combo box if the name has changed
+			self.tile_set_list.setItemText(index, name)
 
 		# Save to JSON file
 		if hasattr(self.parent(), 'save_tile_sets'):
 			self.parent().save_tile_sets("tile_sets.json")
 
+		QMessageBox.information(self, "Success", "Tile set saved successfully.")
 class MapGenerator(QWidget):
 	def __init__(self):
 		super().__init__()
@@ -298,6 +370,7 @@ class MapGenerator(QWidget):
 		
 		self.prolog.consult("map_rules2.pl")
 		self.prolog.consult("map_rules3.pl")
+		self.prolog.consult("constraints.pl")
 		self.prolog.consult("pathfinding.pl")
 		
 		self.start_pos = None
@@ -313,6 +386,8 @@ class MapGenerator(QWidget):
 
 		# Left panel (controls)
 		left_layout = QVBoxLayout()
+		self.left_layout = left_layout
+		self.left_layout_initial_count = self.left_layout.count()
 		self.percentage_sliders = {}
 		self.percentage_labels = {}
 		total_percentage = 0
@@ -397,9 +472,9 @@ class MapGenerator(QWidget):
 		left_layout.addWidget(pathfinding_group)
 
 		# Edit Tile Sets Button
-		edit_button = QPushButton('Edit Tile Sets')
-		edit_button.clicked.connect(self.open_tile_set_editor)
-		left_layout.addWidget(edit_button)
+		self.edit_button = QPushButton('Edit Tile Sets')
+		self.edit_button.clicked.connect(self.open_tile_set_editor)
+		left_layout.addWidget(self.edit_button)
 
 		# Add the left panel to the main layout
 		layout.addLayout(left_layout)
@@ -619,10 +694,16 @@ class MapGenerator(QWidget):
 				neighbors = [corrected_map[ny][nx] for nx, ny in neighbor_positions]
 
 				# Check 'Cannot Be Next To' constraints
-				invalid_neighbor = any(
-					neighbor in current_tile_set.cannot_be_next_to
-					for neighbor in neighbors
-				)
+				#invalid_neighbor = any(
+				#	neighbor in current_tile_set.cannot_be_next_to
+				#	for neighbor in neighbors
+				#)
+				neighbors_str = '[' + ', '.join(f"'{neighbor}'" for neighbor in neighbors) + ']'
+				query = f"invalid_tile('{current_tile_name}', {neighbors_str})"
+				result = list(self.prolog.query(query))
+				
+				invalid_neighbor = bool(result)
+
 				if invalid_neighbor:
 					suitable_tile_found = False
 					# Try non-discoverable tiles
@@ -813,12 +894,16 @@ class MapGenerator(QWidget):
 		
 		self.scene.addItem(QGraphicsPixmapItem(pixmap))
 
+	def on_editor_closed(self):
+		self.edit_button.setEnabled(True)
+
 	def open_tile_set_editor(self):
 		self.editor = TileSetEditor(self.tile_sets, self)
 		self.editor.setWindowModality(Qt.ApplicationModal)
 		self.editor.show()
 		self.editor.raise_()
 		self.editor.activateWindow()
+		self.edit_button.setEnabled(False)
 
 	def select_color(self):
 		color = QColorDialog.getColor()
@@ -846,6 +931,13 @@ class MapGenerator(QWidget):
 			TileSet("sand", 1, [], ["water"], QColor(252, 255, 148), False, "")
 		]
 		return default_tile_sets
+
+	def refresh_ui(self):
+		# ideally would refresh sliders
+
+		self.edit_button.setEnabled(True)
+
+
 
 
 if __name__ == '__main__':
