@@ -472,35 +472,63 @@ class MapGenerator(QWidget):
 
 	def find_and_draw_path(self):
 		if not self.start_pos or not self.end_pos or not self.current_map_data:
+			print("[DEBUG] Missing required data for pathfinding")
 			return
 			
-		# Convert map data to Prolog list format
-		map_str = str(self.current_map_data).replace("'", '"')
+		# Convert map data to Prolog list format with atoms
+		map_str = '[' + ', '.join(
+			'[' + ', '.join(tile for tile in row) + ']' 
+			for row in self.current_map_data
+		) + ']'
+		
+		# Format positions as pos(X, Y)
+		start_formatted = f"pos({self.start_pos[0]}, {self.start_pos[1]})"
+		end_formatted = f"pos({self.end_pos[0]}, {self.end_pos[1]})"
 		
 		# Create Prolog query
-		query = f"find_path({map_str}, {self.start_pos}, {self.end_pos}, Path)"
+		query = f"find_path({map_str}, {start_formatted}, {end_formatted}, Path)"
 		
 		try:
 			# Execute query
 			result = list(self.prolog.query(query))
 			
 			if result:
-				# Extract path from result
-				self.current_path = result[0]['Path']
+				# Extract path from result and convert to coordinate tuples
+				path_str = result[0]['Path']
+				# Convert 'pos(X,Y)' strings to coordinate tuples
+				self.current_path = []
+				for pos in path_str:
+					# Extract numbers from pos string using string manipulation
+					nums = pos.replace('pos(', '').replace(')', '').split(',')
+					x, y = int(nums[0]), int(nums[1])
+					self.current_path.append((x, y))
 				
-				# Get path cost
-				cost_query = f"find_path_cost({str(self.current_path)}, {map_str}, Cost)"
-				cost_result = list(self.prolog.query(cost_query))
-				
-				if cost_result:
-					self.path_cost_label.setText(f"Path Cost: {cost_result[0]['Cost']}")
-				
-				self.redraw_map()
+				if self.current_path:
+					# Format the Path for Prolog query
+					path_formatted = '[' + ', '.join(
+						f"pos({x}, {y})" for x, y in self.current_path
+					) + ']'
+					
+					# Get path cost
+					cost_query = f"find_path_cost({path_formatted}, {map_str}, Cost)"
+					cost_result = list(self.prolog.query(cost_query))
+					
+					if cost_result:
+						cost = cost_result[0]['Cost']
+						self.path_cost_label.setText(f"Path Cost: {cost}")
+					
+					self.redraw_map()
+				else:
+					print("[DEBUG] Failed to parse path coordinates")
+					self.path_cost_label.setText("Error parsing path!")
+					
 			else:
+				print("[DEBUG] No path found in query result")
 				self.path_cost_label.setText("No path found!")
 				
 		except Exception as e:
-			print(f"Error finding path: {e}")
+			print(f"[DEBUG] Error in pathfinding: {e}")
+			print(f"[DEBUG] Exception type: {type(e)}")
 			self.path_cost_label.setText("Error finding path!")
 
 	def clear_path(self):
