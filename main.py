@@ -548,28 +548,45 @@ class MapGenerator(QWidget):
 	def find_and_draw_path(self):
 		if not self.start_pos or not self.end_pos or not self.current_map_data:
 			print("[DEBUG] Missing required data for pathfinding")
+			print(f"[DEBUG] Start position: {self.start_pos}")
+			print(f"[DEBUG] End position: {self.end_pos}")
+			print(f"[DEBUG] Map data exists: {bool(self.current_map_data)}")
 			return
-			
+
+		print("\n=== PATHFINDING DEBUG INFO ===")
+		print(f"[DEBUG] Starting pathfinding from {self.start_pos} to {self.end_pos}")
+		
 		# Convert map data to Prolog list format with atoms
 		map_str = '[' + ', '.join(
-			'[' + ', '.join(tile for tile in row) + ']' 
+			'[' + ', '.join(tile for tile in row) + ']'
 			for row in self.current_map_data
 		) + ']'
-		
+		print("\n[DEBUG] Formatted map data for Prolog:")
+		print(map_str)
+
 		# Format positions as pos(X, Y)
 		start_formatted = f"pos({self.start_pos[0]}, {self.start_pos[1]})"
 		end_formatted = f"pos({self.end_pos[0]}, {self.end_pos[1]})"
-		
+		print(f"\n[DEBUG] Formatted start position: {start_formatted}")
+		print(f"[DEBUG] Formatted end position: {end_formatted}")
+
 		# Create Prolog query
 		query = f"find_path({map_str}, {start_formatted}, {end_formatted}, Path)"
-		
+		print("\n[DEBUG] Generated Prolog query:")
+		print(query)
+
 		try:
+			print("\n[DEBUG] Executing Prolog query...")
 			# Execute query
 			result = list(self.prolog.query(query))
-			
+			print(f"[DEBUG] Query result: {result}")
+
 			if result:
+				print("\n[DEBUG] Path found! Processing results...")
 				# Extract path from result and convert to coordinate tuples
 				path_str = result[0]['Path']
+				print(f"[DEBUG] Raw path from Prolog: {path_str}")
+
 				# Convert 'pos(X,Y)' strings to coordinate tuples
 				self.current_path = []
 				for pos in path_str:
@@ -577,34 +594,52 @@ class MapGenerator(QWidget):
 					nums = pos.replace('pos(', '').replace(')', '').split(',')
 					x, y = int(nums[0]), int(nums[1])
 					self.current_path.append((x, y))
-				
+					print(f"[DEBUG] Processed position: ({x}, {y})")
+
 				if self.current_path:
+					print("\n[DEBUG] Path conversion successful")
 					# Format the Path for Prolog query
 					path_formatted = '[' + ', '.join(
 						f"pos({x}, {y})" for x, y in self.current_path
 					) + ']'
-					
+					print(f"[DEBUG] Formatted path for cost calculation: {path_formatted}")
+
 					# Get path cost
 					cost_query = f"find_path_cost({path_formatted}, {map_str}, Cost)"
-					cost_result = list(self.prolog.query(cost_query))
+					print("\n[DEBUG] Executing cost calculation query:")
+					print(cost_query)
 					
+					cost_result = list(self.prolog.query(cost_query))
+					print(f"[DEBUG] Cost calculation result: {cost_result}")
+
 					if cost_result:
 						cost = cost_result[0]['Cost']
+						print(f"[DEBUG] Final path cost: {cost}")
 						self.path_cost_label.setText(f"Path Cost: {cost}")
-					
+					else:
+						print("[DEBUG] Failed to calculate path cost")
+
 					self.redraw_map()
+					print("\n[DEBUG] Map redraw completed")
 				else:
 					print("[DEBUG] Failed to parse path coordinates")
 					self.path_cost_label.setText("Error parsing path!")
-					
+
 			else:
 				print("[DEBUG] No path found in query result")
 				self.path_cost_label.setText("No path found!")
-				
+
 		except Exception as e:
+			print("\n=== PATHFINDING ERROR ===")
 			print(f"[DEBUG] Error in pathfinding: {e}")
 			print(f"[DEBUG] Exception type: {type(e)}")
+			print(f"[DEBUG] Exception details: {str(e)}")
+			import traceback
+			print("[DEBUG] Full traceback:")
+			print(traceback.format_exc())
 			self.path_cost_label.setText("Error finding path!")
+
+		print("\n=== END PATHFINDING DEBUG INFO ===\n")
 
 	def clear_path(self):
 		self.start_pos = None
