@@ -300,13 +300,13 @@ class TileSetEditor(QWidget):
 		self.tile_set_discoverable.setChecked(False)
 		self.tile_set_texture_path.clear()
 
-		for i in range(self.tile_set_cannot_be_next_to.count()):
-			item = self.tile_set_cannot_be_next_to.item(i)
-			item.setCheckState(Qt.Unchecked)
+		#for i in range(self.tile_set_cannot_be_next_to.count()):
+		#	item = self.tile_set_cannot_be_next_to.item(i)
+		#	item.setCheckState(Qt.Unchecked)
 
-		for i in range(self.tile_set_must_be_next_to.count()):
-			item = self.tile_set_must_be_next_to.item(i)
-			item.setCheckState(Qt.Unchecked)
+		#for i in range(self.tile_set_must_be_next_to.count()):
+		#	item = self.tile_set_must_be_next_to.item(i)
+		#	item.setCheckState(Qt.Unchecked)
 
 		self.is_new_tile = True
 
@@ -816,10 +816,9 @@ class MapGenerator(QWidget):
 
 				# Check 'Must Be Next To' constraints
 				elif current_tile_set.must_be_next_to:
-					must_have_neighbor = any(
-						neighbor in current_tile_set.must_be_next_to
-						for neighbor in neighbors
-					)
+					query_must = f"must_be_next_to('{current_tile_name}', {neighbors_str})"
+					result_must = list(self.prolog.query(query_must))
+					must_have_neighbor = bool(result_must)
 					if not must_have_neighbor:
 						suitable_tile_found = False
 						# Try non-discoverable tiles
