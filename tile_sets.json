@@ -2,10 +2,10 @@
     {
         "name": "water",
         "traversal_cost": 3,
-        "cannot_be_next_to": [
-            "land"
+        "cannot_be_next_to": [],
+        "must_be_next_to": [
+            "sand"
         ],
-        "must_be_next_to": [],
         "color": "#0000ff",
         "discoverable": true,
         "texture_path": ""
@@ -53,5 +53,25 @@
         "color": "#fcff94",
         "discoverable": false,
         "texture_path": ""
+    },
+    {
+        "name": "moutain",
+        "traversal_cost": 3,
+        "cannot_be_next_to": [],
+        "must_be_next_to": [
+            "land"
+        ],
+        "color": "#550000",
+        "discoverable": true,
+        "texture_path": ""
+    },
+    {
+        "name": "Void2",
+        "traversal_cost": 1,
+        "cannot_be_next_to": [],
+        "must_be_next_to": [],
+        "color": "#000000",
+        "discoverable": true,
+        "texture_path": "/mnt/e/SE-AI-Project/assets/void.png"
     }
 ]

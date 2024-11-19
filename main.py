@@ -4,6 +4,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QPainter, QPixmap, QPen
 from pyswip import Prolog
 import random
+import copy
 import json
 MAX_HEIGHT = 150
 MAX_WIDTH = 150
@@ -117,7 +118,7 @@ class TileSetEditor(QWidget):
 	def __init__(self, tile_sets, parent=None):
 		super().__init__(parent)
 		self.tile_sets = tile_sets
-		self.selected_color = QColor(Qt.white)
+		self.selected_color = None
 		self.is_new_tile = False
 		self.initUI()
 
@@ -433,13 +434,17 @@ class MapGenerator(QWidget):
 		method_label = QLabel('Generation Method:')
 		self.perlin_radio = QRadioButton('Perlin Noise')
 		self.random_radio = QRadioButton('Pure Random')
+		self.wfc_radio = QRadioButton('Wave Function Collapse')
 		self.perlin_radio.setChecked(True)  # Set Perlin as default
 		method_group = QButtonGroup(self)
 		method_group.addButton(self.perlin_radio)
 		method_group.addButton(self.random_radio)
+		method_group.addButton(self.wfc_radio)
 		left_layout.addWidget(method_label)
 		left_layout.addWidget(self.perlin_radio)
 		left_layout.addWidget(self.random_radio)
+		left_layout.addWidget(self.wfc_radio)
+
 
 		for tile_set in self.tile_sets:
 			if not tile_set.discoverable:
@@ -726,6 +731,12 @@ class MapGenerator(QWidget):
 
 		percentages_list = [f'{name}-{percentages[name]}' for name in percentages]
 
+		if self.wfc_radio.isChecked():
+			map_data = self.wfc_generate_map(width, height, percentages_list)
+			self.display_map(map_data)
+			return
+
+
 		# Call Prolog to generate the map
 		if self.perlin_radio.isChecked():
 			query = f"generate_map({width}, {height}, [{', '.join(percentages_list)}], Map)"
@@ -857,6 +868,95 @@ class MapGenerator(QWidget):
 						if not suitable_tile_found:
 							corrected_map[y][x] = current_tile_name
 		return corrected_map
+
+	def wfc_generate_map(self, width, height, percentages_list):
+		grid = [[set(tile.name for tile in self.tile_sets if tile.discoverable) for _ in range(width)] for _ in range(height)]
+		weights = {p.split('-')[0]: int(p.split('-')[1]) for p in percentages_list}
+
+		def get_neighbors(x, y):
+			neighbors = []
+			if x > 0:
+				neighbors.append((x - 1, y))
+			if x < width - 1:
+				neighbors.append((x + 1, y))
+			if y > 0:
+				neighbors.append((x, y - 1))
+			if y < height - 1:
+				neighbors.append((x, y + 1))
+			return neighbors
+
+		def propagate(x, y):
+			stack = [(x, y)]
+			while stack:
+				cx, cy = stack.pop()
+				current_options = grid[cy][cx]
+				neighbors = get_neighbors(cx, cy)
+				for nx, ny in neighbors:
+					neighbor_options = grid[ny][nx]
+					allowed = set()
+					for tile in neighbor_options:
+						tile_set = next((ts for ts in self.tile_sets if ts.name == tile), None)
+						if not tile_set:
+							continue
+						if any(constraint in current_options for constraint in tile_set.cannot_be_next_to):
+							continue
+						allowed.add(tile)
+					if allowed != neighbor_options:
+						if not allowed:
+							raise ValueError(f"No valid tiles available for cell ({nx}, {ny}) after applying constraints.")
+						grid[ny][nx] = allowed
+						stack.append((nx, ny))
+
+		try:
+			while True:
+				min_options = None
+				min_cells = []
+				for y in range(height):
+					for x in range(width):
+						options = grid[y][x]
+						if len(options) == 1:
+							continue
+						if min_options is None or len(options) < min_options:
+							min_options = len(options)
+							min_cells = [(x, y)]
+						elif len(options) == min_options:
+							min_cells.append((x, y))
+
+				if not min_cells:
+					break  
+
+				x, y = random.choice(min_cells)
+				options = list(grid[y][x])
+
+				if not options:
+					raise ValueError(f"No available options to collapse at cell ({x}, {y}).")
+
+				total_weight = sum(weights.get(tile, 1) for tile in options)
+				if total_weight == 0:
+					raise ValueError(f"Total weight is zero for cell ({x}, {y}). Check your percentage settings.")
+
+				r = random.uniform(0, total_weight)
+				upto = 0
+				selected_tile = None
+				for tile in options:
+					weight = weights.get(tile, 1)
+					if upto + weight >= r:
+						selected_tile = tile
+						break
+					upto += weight
+
+				if not selected_tile:
+					selected_tile = options[-1]
+
+				grid[y][x] = {selected_tile}
+				propagate(x, y)
+
+		except ValueError as e:
+			QMessageBox.critical(self, "WFC Generation Error", str(e))
+			return []
+
+		map_data = [[next(iter(grid[y][x])) for x in range(width)] for y in range(height)]
+		return map_data
 
 	def load_tile_sets(self, filename):
 		try:
@@ -1013,6 +1113,7 @@ class MapGenerator(QWidget):
 			(self.left_layout.itemAt(0).widget(), 0),  # Method label
 			(self.left_layout.itemAt(1).widget(), 1),  # Perlin radio
 			(self.left_layout.itemAt(2).widget(), 2),  # Random radio
+			(self.left_layout.itemAt(3).widget(), 3),  # WFC radio
 			
 			# Control elements (store their original positions)
 			(self.seed_label, -8),
@@ -1041,7 +1142,7 @@ class MapGenerator(QWidget):
 		self.percentage_labels.clear()
 		
 		# Restore method selector elements first
-		for widget, pos in static_elements[:3]:  # First 3 are method selector elements
+		for widget, pos in static_elements[:5]:  # First 4 are method selector elements
 			self.left_layout.insertWidget(pos, widget)
 		
 		# Add new sliders and labels for each discoverable tile set
