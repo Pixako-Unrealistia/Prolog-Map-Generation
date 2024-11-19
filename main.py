@@ -968,9 +968,88 @@ class MapGenerator(QWidget):
 		return default_tile_sets
 
 	def refresh_ui(self):
-		# ideally would refresh sliders
-
+		# Re-enable the edit button
 		self.edit_button.setEnabled(True)
+		
+		# Store all static UI elements that should be preserved
+		static_elements = [
+			# Method selector elements
+			(self.left_layout.itemAt(0).widget(), 0),  # Method label
+			(self.left_layout.itemAt(1).widget(), 1),  # Perlin radio
+			(self.left_layout.itemAt(2).widget(), 2),  # Random radio
+			
+			# Control elements (store their original positions)
+			(self.seed_label, -8),
+			(self.regenerate_button, -7),
+			(self.width_label, -6),
+			(self.width_slider, -5),
+			(self.height_label, -4),
+			(self.height_slider, -3),
+			(self.auto_adjust_checkbox, -2),
+			(self.generate_button, -1)
+		]
+		
+		# Temporarily remove all static elements
+		for widget, _ in static_elements:
+			self.left_layout.removeWidget(widget)
+			widget.setParent(None)  # Detach from layout but preserve widget
+			
+		# Clear existing percentage sliders and labels
+		while self.left_layout.count() > 0:
+			item = self.left_layout.takeAt(0)
+			if item.widget():
+				item.widget().deleteLater()
+		
+		# Clear the stored sliders and labels
+		self.percentage_sliders.clear()
+		self.percentage_labels.clear()
+		
+		# Restore method selector elements first
+		for widget, pos in static_elements[:3]:  # First 3 are method selector elements
+			self.left_layout.insertWidget(pos, widget)
+		
+		# Add new sliders and labels for each discoverable tile set
+		for tile_set in self.tile_sets:
+			if not tile_set.discoverable:
+				continue
+			
+			# Create and add label
+			label = QLabel(f'{tile_set.name.capitalize()}')
+			self.percentage_labels[tile_set.name] = label
+			self.left_layout.addWidget(label)
+			
+			# Create and add slider
+			slider = QSlider(Qt.Horizontal)
+			slider.setRange(0, 100)
+			slider.setValue(0)
+			slider.valueChanged.connect(self.update_labels)
+			self.percentage_sliders[tile_set.name] = slider
+			self.left_layout.addWidget(slider)
+		
+		# Restore remaining control elements in their original order
+		for widget, _ in static_elements[3:]:  # Skip method selector elements
+			self.left_layout.addWidget(widget)
+		
+		# Add back pathfinding controls
+		pathfinding_group = QGroupBox("Pathfinding Controls")
+		pathfinding_layout = QVBoxLayout()
+		pathfinding_layout.addWidget(self.path_mode_checkbox)
+		pathfinding_layout.addWidget(self.clear_path_button)
+		pathfinding_layout.addWidget(self.path_cost_label)
+		pathfinding_group.setLayout(pathfinding_layout)
+		self.left_layout.addWidget(pathfinding_group)
+		
+		# Add back the edit button
+		self.edit_button = QPushButton('Edit Tile Sets')
+		self.edit_button.clicked.connect(self.open_tile_set_editor)
+		self.left_layout.addWidget(self.edit_button)
+		
+		# Update labels
+		self.update_labels()
+		
+		# If there's a current map, redraw it with the updated tile sets
+		if self.current_map_data:
+			self.redraw_map()
 
 
 
