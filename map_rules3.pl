@@ -42,7 +42,7 @@ perlin_noise(GlobalSeed, X, Y, NoiseValue) :-
 	lerp(V, AB, CD, NoiseValueUnscaled),
 	NoiseValue is (NoiseValueUnscaled + 1) * 50.
 
-% Fade function for smoothing, if have time I will make it optional, if this message remains means that I forgot.
+% Fade function for smoothing
 fade(T, Faded) :-
 	Faded is T * T * T * (T * (T * 6 - 15) + 10).
 

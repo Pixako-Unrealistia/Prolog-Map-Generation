@@ -1,5 +1,5 @@
 import sys
-from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QSlider, QLabel, QHBoxLayout, QCheckBox, QPushButton, QGridLayout, QGraphicsView, QGraphicsScene, QGraphicsPixmapItem, QSpinBox, QLineEdit, QColorDialog, QFileDialog, QComboBox, QScrollArea, QGroupBox, QRadioButton, QButtonGroup
+from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QSlider, QLabel, QHBoxLayout, QCheckBox, QPushButton, QGridLayout, QGraphicsView, QGraphicsScene, QGraphicsPixmapItem, QSpinBox, QLineEdit, QColorDialog, QFileDialog, QComboBox, QScrollArea, QGroupBox, QRadioButton, QButtonGroup, QMessageBox, QListWidget, QListWidgetItem, QAbstractItemView
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QPainter, QPixmap, QPen
 from pyswip import Prolog
@@ -7,8 +7,8 @@ import random
 import json
 MAX_HEIGHT = 150
 MAX_WIDTH = 150
-MIN_HEIGHT = 5
-MIN_WIDTH = 5
+MIN_HEIGHT = 50
+MIN_WIDTH = 50
 class TileSet:
 	def __init__(self, name, traversal_cost, cannot_be_next_to, must_be_next_to, color, discoverable, texture_path):
 		self.name = name
@@ -66,17 +66,41 @@ class TileStructure:
 		self.east = east
 		self.west = west
 
+
 class GraphicViewOverloader(QGraphicsView):
 	def __init__(self, parent=None):
 		super().__init__(parent)
 		self.setRenderHint(QPainter.Antialiasing)
-		self.setDragMode(QGraphicsView.ScrollHandDrag)
 		self.setTransformationAnchor(QGraphicsView.AnchorUnderMouse)
 		self.setResizeAnchor(QGraphicsView.AnchorUnderMouse)
 		self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
 		self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
 		self.setInteractive(True)
 		self.setViewportUpdateMode(QGraphicsView.FullViewportUpdate)
+		self.drag_active = False
+		self.last_pos = None
+
+	def mousePressEvent(self, event):
+		if hasattr(self.parent(), 'path_mode_checkbox') and self.parent().path_mode_checkbox.isChecked():
+			# Forward the event to the parent's handle_map_click
+			if hasattr(self.parent(), 'handle_map_click'):
+				self.parent().handle_map_click(event)
+		else:
+			# Enable dragging
+			self.setDragMode(QGraphicsView.ScrollHandDrag)
+			self.drag_active = True
+			self.last_pos = event.position()
+			super().mousePressEvent(event)
+
+	def mouseReleaseEvent(self, event):
+		if self.drag_active:
+			self.setDragMode(QGraphicsView.NoDrag)
+			self.drag_active = False
+			super().mouseReleaseEvent(event)
+
+	def mouseMoveEvent(self, event):
+		if self.drag_active:
+			super().mouseMoveEvent(event)
 
 	def wheelEvent(self, event):
 		zoom_in_factor = 1.2
@@ -93,7 +117,8 @@ class TileSetEditor(QWidget):
 	def __init__(self, tile_sets, parent=None):
 		super().__init__(parent)
 		self.tile_sets = tile_sets
-		self.selected_color = None
+		self.selected_color = QColor(Qt.white)
+		self.is_new_tile = False
 		self.initUI()
 
 	def initUI(self):
@@ -133,15 +158,27 @@ class TileSetEditor(QWidget):
 
 		# Cannot Be Next To
 		form_layout.addWidget(QLabel('Cannot Be Next To:'), current_row, 0)
-		self.tile_set_cannot_be_next_to = QLineEdit()
-		self.tile_set_cannot_be_next_to.setPlaceholderText("Enter comma-separated values")
+		self.tile_set_cannot_be_next_to = QListWidget()
+		self.tile_set_cannot_be_next_to.setSelectionMode(QAbstractItemView.NoSelection)
+		self.tile_set_cannot_be_next_to.setFixedHeight(100)
+		for ts in self.tile_sets:
+			item = QListWidgetItem(ts.name)
+			item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+			item.setCheckState(Qt.Unchecked)
+			self.tile_set_cannot_be_next_to.addItem(item)
 		form_layout.addWidget(self.tile_set_cannot_be_next_to, current_row, 1)
 		current_row += 1
 
 		# Must Be Next To
 		form_layout.addWidget(QLabel('Must Be Next To:'), current_row, 0)
-		self.tile_set_must_be_next_to = QLineEdit()
-		self.tile_set_must_be_next_to.setPlaceholderText("Enter comma-separated values")
+		self.tile_set_must_be_next_to = QListWidget()
+		self.tile_set_must_be_next_to.setSelectionMode(QAbstractItemView.NoSelection)
+		self.tile_set_must_be_next_to.setFixedHeight(100)
+		for ts in self.tile_sets:
+			item = QListWidgetItem(ts.name)
+			item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+			item.setCheckState(Qt.Unchecked)
+			self.tile_set_must_be_next_to.addItem(item)
 		form_layout.addWidget(self.tile_set_must_be_next_to, current_row, 1)
 		current_row += 1
 
@@ -178,10 +215,13 @@ class TileSetEditor(QWidget):
 
 		# Buttons
 		button_layout = QHBoxLayout()
+		new_button = QPushButton('New Tile')
+		new_button.clicked.connect(self.new_tile)
 		save_button = QPushButton('Save Changes')
 		save_button.clicked.connect(self.save_changes)
 		cancel_button = QPushButton('Cancel')
-		cancel_button.clicked.connect(self.close)
+		cancel_button.clicked.connect(self.close_overwrite)
+		button_layout.addWidget(new_button)
 		button_layout.addWidget(save_button)
 		button_layout.addWidget(cancel_button)
 		layout.addLayout(button_layout)
@@ -203,25 +243,38 @@ class TileSetEditor(QWidget):
 			self.load_tile_set(0)
 
 	def load_tile_set(self, index):
-		if index < 0 or index >= len(self.tile_sets):
-			return
-			
-		tile_set = self.tile_sets[index]
-		self.tile_set_name.setText(tile_set.name)
-		self.tile_set_traversal_cost.setValue(tile_set.traversal_cost)
-		self.tile_set_cannot_be_next_to.setText(','.join(tile_set.cannot_be_next_to))
-		self.tile_set_must_be_next_to.setText(','.join(tile_set.must_be_next_to))
-		self.selected_color = tile_set.color
-		self.update_color_display(tile_set.color)
-		self.tile_set_discoverable.setChecked(tile_set.discoverable)
-		self.tile_set_texture_path.setText(tile_set.texture_path)
+		if index >= 0 and index < len(self.tile_sets):
+			self.is_new_tile = False
+			tile_set = self.tile_sets[index]
+			self.tile_set_name.setText(tile_set.name)
+			self.tile_set_traversal_cost.setValue(tile_set.traversal_cost)
+
+			for i in range(self.tile_set_cannot_be_next_to.count()):
+				item = self.tile_set_cannot_be_next_to.item(i)
+				if item.text() in tile_set.cannot_be_next_to:
+					item.setCheckState(Qt.Checked)
+				else:
+					item.setCheckState(Qt.Unchecked)
+
+			for i in range(self.tile_set_must_be_next_to.count()):
+				item = self.tile_set_must_be_next_to.item(i)
+				if item.text() in tile_set.must_be_next_to:
+					item.setCheckState(Qt.Checked)
+				else:
+					item.setCheckState(Qt.Unchecked)
+
+			self.update_color_display(tile_set.color)
+			self.tile_set_discoverable.setChecked(tile_set.discoverable)
+			self.tile_set_texture_path.setText(tile_set.texture_path)
 
 	def update_color_display(self, color):
 		self.tile_set_color.setStyleSheet(f'background-color: {color.name()}')
 		self.color_hex.setText(color.name())
 
 	def select_color(self):
-		color = QColorDialog.getColor(initial=self.selected_color)
+		if not self.selected_color:
+			self.selected_color = QColor(0, 0, 0)
+		color = QColorDialog.getColor(self.selected_color)
 		if color.isValid():
 			self.selected_color = color
 			self.update_color_display(color)
@@ -237,31 +290,111 @@ class TileSetEditor(QWidget):
 		if file_path:
 			self.tile_set_texture_path.setText(file_path)
 
+	def new_tile(self):
+		self.tile_set_name.clear()
+		self.tile_set_traversal_cost.setValue(1)
+		self.tile_set_cannot_be_next_to.clear()
+		self.tile_set_must_be_next_to.clear()
+		self.selected_color = QColor(0, 0, 0)
+		self.update_color_display(self.selected_color)
+		self.tile_set_discoverable.setChecked(False)
+		self.tile_set_texture_path.clear()
+
+		#for i in range(self.tile_set_cannot_be_next_to.count()):
+		#	item = self.tile_set_cannot_be_next_to.item(i)
+		#	item.setCheckState(Qt.Unchecked)
+
+		#for i in range(self.tile_set_must_be_next_to.count()):
+		#	item = self.tile_set_must_be_next_to.item(i)
+		#	item.setCheckState(Qt.Unchecked)
+
+		self.is_new_tile = True
+
+		self.tile_set_list.blockSignals(True)
+		self.tile_set_list.setCurrentIndex(-1)
+		self.tile_set_list.blockSignals(False)
+
+	def close_overwrite(self):
+		if hasattr(self.parent(), 'refresh_ui'):
+			self.parent().refresh_ui()
+		self.close()
+
 	def save_changes(self):
-		index = self.tile_set_list.currentIndex()
-		if index < 0 or index >= len(self.tile_sets):
+		# Get data from input fields
+		name = self.tile_set_name.text().strip()
+		if not name:
+			QMessageBox.warning(self, "Validation Error", "Tile name cannot be empty.")
 			return
 
-		tile_set = self.tile_sets[index]
+		traversal_cost = self.tile_set_traversal_cost.value()
 		
-		# Update tile set properties
-		tile_set.name = self.tile_set_name.text().strip()
-		tile_set.traversal_cost = self.tile_set_traversal_cost.value()
-		tile_set.cannot_be_next_to = [x.strip() for x in self.tile_set_cannot_be_next_to.text().split(',') if x.strip()]
-		tile_set.must_be_next_to = [x.strip() for x in self.tile_set_must_be_next_to.text().split(',') if x.strip()]
-		tile_set.color = self.selected_color
-		tile_set.discoverable = self.tile_set_discoverable.isChecked()
-		tile_set.texture_path = self.tile_set_texture_path.text().strip()
+		cannot_be_next_to = []
+		for i in range(self.tile_set_cannot_be_next_to.count()):
+			item = self.tile_set_cannot_be_next_to.item(i)
+			if item.checkState() == Qt.Checked:
+				cannot_be_next_to.append(item.text())
 
-		# Update the combo box if name changed
-		current_text = self.tile_set_list.currentText()
-		if current_text != tile_set.name:
-			self.tile_set_list.setItemText(index, tile_set.name)
+		must_be_next_to = []
+		for i in range(self.tile_set_must_be_next_to.count()):
+			item = self.tile_set_must_be_next_to.item(i)
+			if item.checkState() == Qt.Checked:
+				must_be_next_to.append(item.text())
+
+
+		color = self.selected_color
+		discoverable = self.tile_set_discoverable.isChecked()
+		texture_path = self.tile_set_texture_path.text().strip()
+
+		# Check for unique tile name
+		existing_names = [ts.name for ts in self.tile_sets]
+		if self.is_new_tile and name in existing_names:
+			QMessageBox.warning(self, "Validation Error", "Tile name must be unique.")
+			return
+
+		if getattr(self, 'is_new_tile', False):
+			# Create a new TileSet instance
+			new_tile_set = TileSet(
+				name,
+				traversal_cost,
+				cannot_be_next_to,
+				must_be_next_to,
+				color,
+				discoverable,
+				texture_path
+			)
+			# Add the new tile set to the list
+			self.tile_sets.append(new_tile_set)
+			# Update the tile set combo box
+			self.tile_set_list.addItem(name)
+			index = self.tile_set_list.count() - 1
+			self.tile_set_list.setCurrentIndex(index)
+			self.is_new_tile = False
+		else:
+			# Update existing tile set
+			index = self.tile_set_list.currentIndex()
+			if index < 0 or index >= len(self.tile_sets):
+				QMessageBox.warning(self, "Selection Error", "No tile set selected.")
+				return
+
+			tile_set = self.tile_sets[index]
+
+			# Update tile set properties
+			tile_set.name = name
+			tile_set.traversal_cost = traversal_cost
+			tile_set.cannot_be_next_to = cannot_be_next_to
+			tile_set.must_be_next_to = must_be_next_to
+			tile_set.color = color
+			tile_set.discoverable = discoverable
+			tile_set.texture_path = texture_path
+
+			# Update the combo box if the name has changed
+			self.tile_set_list.setItemText(index, name)
 
 		# Save to JSON file
 		if hasattr(self.parent(), 'save_tile_sets'):
 			self.parent().save_tile_sets("tile_sets.json")
 
+		QMessageBox.information(self, "Success", "Tile set saved successfully.")
 class MapGenerator(QWidget):
 	def __init__(self):
 		super().__init__()
@@ -274,6 +407,7 @@ class MapGenerator(QWidget):
 		
 		self.prolog.consult("map_rules2.pl")
 		self.prolog.consult("map_rules3.pl")
+		self.prolog.consult("constraints.pl")
 		self.prolog.consult("pathfinding.pl")
 		
 		self.start_pos = None
@@ -289,6 +423,8 @@ class MapGenerator(QWidget):
 
 		# Left panel (controls)
 		left_layout = QVBoxLayout()
+		self.left_layout = left_layout
+		self.left_layout_initial_count = self.left_layout.count()
 		self.percentage_sliders = {}
 		self.percentage_labels = {}
 		total_percentage = 0
@@ -373,9 +509,9 @@ class MapGenerator(QWidget):
 		left_layout.addWidget(pathfinding_group)
 
 		# Edit Tile Sets Button
-		edit_button = QPushButton('Edit Tile Sets')
-		edit_button.clicked.connect(self.open_tile_set_editor)
-		left_layout.addWidget(edit_button)
+		self.edit_button = QPushButton('Edit Tile Sets')
+		self.edit_button.clicked.connect(self.open_tile_set_editor)
+		left_layout.addWidget(self.edit_button)
 
 		# Add the left panel to the main layout
 		layout.addLayout(left_layout)
@@ -424,8 +560,10 @@ class MapGenerator(QWidget):
 		if not self.path_mode_checkbox.isChecked() or not self.current_map_data:
 			return
 			
-		view_pos = event.pos()
+		# Use position() instead of pos() and handle QPointF directly
+		view_pos = event.position()
 		scene_pos = self.map_display.mapToScene(view_pos.toPoint())
+		
 		x = int(scene_pos.x() / self.cell_size)
 		y = int(scene_pos.y() / self.cell_size)
 		
@@ -446,36 +584,99 @@ class MapGenerator(QWidget):
 
 	def find_and_draw_path(self):
 		if not self.start_pos or not self.end_pos or not self.current_map_data:
+			print("[DEBUG] Missing required data for pathfinding")
+			print(f"[DEBUG] Start position: {self.start_pos}")
+			print(f"[DEBUG] End position: {self.end_pos}")
+			print(f"[DEBUG] Map data exists: {bool(self.current_map_data)}")
 			return
-			
-		# Convert map data to Prolog list format
-		map_str = str(self.current_map_data).replace("'", '"')
+
+		print("\n=== PATHFINDING DEBUG INFO ===")
+		print(f"[DEBUG] Starting pathfinding from {self.start_pos} to {self.end_pos}")
 		
+		# Convert map data to Prolog list format with atoms
+		map_str = '[' + ', '.join(
+			'[' + ', '.join(tile for tile in row) + ']'
+			for row in self.current_map_data
+		) + ']'
+		print("\n[DEBUG] Formatted map data for Prolog:")
+		print(map_str)
+
+		# Format positions as pos(X, Y)
+		start_formatted = f"pos({self.start_pos[0]}, {self.start_pos[1]})"
+		end_formatted = f"pos({self.end_pos[0]}, {self.end_pos[1]})"
+		print(f"\n[DEBUG] Formatted start position: {start_formatted}")
+		print(f"[DEBUG] Formatted end position: {end_formatted}")
+
 		# Create Prolog query
-		query = f"find_path({map_str}, {self.start_pos}, {self.end_pos}, Path)"
-		
+		query = f"find_path({map_str}, {start_formatted}, {end_formatted}, Path)"
+		print("\n[DEBUG] Generated Prolog query:")
+		print(query)
+
 		try:
+			print("\n[DEBUG] Executing Prolog query...")
 			# Execute query
 			result = list(self.prolog.query(query))
-			
+			print(f"[DEBUG] Query result: {result}")
+
 			if result:
-				# Extract path from result
-				self.current_path = result[0]['Path']
-				
-				# Get path cost
-				cost_query = f"find_path_cost({str(self.current_path)}, {map_str}, Cost)"
-				cost_result = list(self.prolog.query(cost_query))
-				
-				if cost_result:
-					self.path_cost_label.setText(f"Path Cost: {cost_result[0]['Cost']}")
-				
-				self.redraw_map()
+				print("\n[DEBUG] Path found! Processing results...")
+				# Extract path from result and convert to coordinate tuples
+				path_str = result[0]['Path']
+				print(f"[DEBUG] Raw path from Prolog: {path_str}")
+
+				# Convert 'pos(X,Y)' strings to coordinate tuples
+				self.current_path = []
+				for pos in path_str:
+					# Extract numbers from pos string using string manipulation
+					nums = pos.replace('pos(', '').replace(')', '').split(',')
+					x, y = int(nums[0]), int(nums[1])
+					self.current_path.append((x, y))
+					print(f"[DEBUG] Processed position: ({x}, {y})")
+
+				if self.current_path:
+					print("\n[DEBUG] Path conversion successful")
+					# Format the Path for Prolog query
+					path_formatted = '[' + ', '.join(
+						f"pos({x}, {y})" for x, y in self.current_path
+					) + ']'
+					print(f"[DEBUG] Formatted path for cost calculation: {path_formatted}")
+
+					# Get path cost
+					cost_query = f"find_path_cost({path_formatted}, {map_str}, Cost)"
+					print("\n[DEBUG] Executing cost calculation query:")
+					print(cost_query)
+					
+					cost_result = list(self.prolog.query(cost_query))
+					print(f"[DEBUG] Cost calculation result: {cost_result}")
+
+					if cost_result:
+						cost = cost_result[0]['Cost']
+						print(f"[DEBUG] Final path cost: {cost}")
+						self.path_cost_label.setText(f"Path Cost: {cost}")
+					else:
+						print("[DEBUG] Failed to calculate path cost")
+
+					self.redraw_map()
+					print("\n[DEBUG] Map redraw completed")
+				else:
+					print("[DEBUG] Failed to parse path coordinates")
+					self.path_cost_label.setText("Error parsing path!")
+
 			else:
+				print("[DEBUG] No path found in query result")
 				self.path_cost_label.setText("No path found!")
-				
+
 		except Exception as e:
-			print(f"Error finding path: {e}")
+			print("\n=== PATHFINDING ERROR ===")
+			print(f"[DEBUG] Error in pathfinding: {e}")
+			print(f"[DEBUG] Exception type: {type(e)}")
+			print(f"[DEBUG] Exception details: {str(e)}")
+			import traceback
+			print("[DEBUG] Full traceback:")
+			print(traceback.format_exc())
 			self.path_cost_label.setText("Error finding path!")
+
+		print("\n=== END PATHFINDING DEBUG INFO ===\n")
 
 	def clear_path(self):
 		self.start_pos = None
@@ -537,9 +738,125 @@ class MapGenerator(QWidget):
 
 		if result:
 			map_data = result[0]['Map']
+			if self.perlin_radio.isChecked():
+				map_data = self.correct_map(map_data)
 			self.display_map(map_data)
 		else:
 			print("No result from Prolog query")
+
+	def correct_map(self, map_data):
+		height = len(map_data)
+		width = len(map_data[0])
+		corrected_map = [row[:] for row in map_data]
+		for y in range(height):
+			for x in range(width):
+				current_tile_name = corrected_map[y][x]
+				current_tile_set = next((ts for ts in self.tile_sets if ts.name == current_tile_name), None)
+				if not current_tile_set:
+					continue
+				neighbor_positions = []
+				if y > 0:
+					neighbor_positions.append((x, y - 1))
+				if y < height - 1:
+					neighbor_positions.append((x, y + 1))
+				if x > 0:
+					neighbor_positions.append((x - 1, y))
+				if x < width - 1:
+					neighbor_positions.append((x + 1, y))
+				neighbors = [corrected_map[ny][nx] for nx, ny in neighbor_positions]
+
+				# Check 'Cannot Be Next To' constraints
+				#invalid_neighbor = any(
+				#	neighbor in current_tile_set.cannot_be_next_to
+				#	for neighbor in neighbors
+				#)
+				neighbors_str = '[' + ', '.join(f"'{neighbor}'" for neighbor in neighbors) + ']'
+				query = f"invalid_tile('{current_tile_name}', {neighbors_str})"
+				result = list(self.prolog.query(query))
+				
+				invalid_neighbor = bool(result)
+
+				if invalid_neighbor:
+					suitable_tile_found = False
+					# Try non-discoverable tiles
+					for border_tile in self.tile_sets:
+						if not border_tile.discoverable:
+							border_invalid = any(
+								neighbor in border_tile.cannot_be_next_to
+								for neighbor in neighbors
+							) or (
+								border_tile.must_be_next_to and not any(
+									neighbor in border_tile.must_be_next_to
+									for neighbor in neighbors
+								)
+							)
+							if not border_invalid:
+								corrected_map[y][x] = border_tile.name
+								suitable_tile_found = True
+								break
+					# Try discoverable tiles
+					if not suitable_tile_found:
+						for ts in self.tile_sets:
+							ts_invalid = any(
+								neighbor in ts.cannot_be_next_to
+								for neighbor in neighbors
+							) or (
+								ts.must_be_next_to and not any(
+									neighbor in ts.must_be_next_to
+									for neighbor in neighbors
+								)
+							)
+							if not ts_invalid:
+								corrected_map[y][x] = ts.name
+								suitable_tile_found = True
+								break
+					# If no tile is found, leave the tile unchanged
+					if not suitable_tile_found:
+						corrected_map[y][x] = current_tile_name
+
+				# Check 'Must Be Next To' constraints
+				elif current_tile_set.must_be_next_to:
+					query_must = f"must_be_next_to('{current_tile_name}', {neighbors_str})"
+					result_must = list(self.prolog.query(query_must))
+					must_have_neighbor = bool(result_must)
+					if not must_have_neighbor:
+						suitable_tile_found = False
+						# Try non-discoverable tiles
+						for border_tile in self.tile_sets:
+							if not border_tile.discoverable:
+								border_invalid = any(
+									neighbor in border_tile.cannot_be_next_to
+									for neighbor in neighbors
+								) or (
+									border_tile.must_be_next_to and not any(
+										neighbor in border_tile.must_be_next_to
+										for neighbor in neighbors
+									)
+								)
+								if not border_invalid:
+									corrected_map[y][x] = border_tile.name
+									suitable_tile_found = True
+									break
+						# Try discoverable tiles
+						if not suitable_tile_found:
+							for ts in self.tile_sets:
+								ts_invalid = any(
+									neighbor in ts.cannot_be_next_to
+									for neighbor in neighbors
+								) or (
+									ts.must_be_next_to and not any(
+										neighbor in ts.must_be_next_to
+										for neighbor in neighbors
+									)
+								)
+								if not ts_invalid:
+									corrected_map[y][x] = ts.name
+									suitable_tile_found = True
+									break
+						# If no tile is found, leave the tile unchanged
+						if not suitable_tile_found:
+							corrected_map[y][x] = current_tile_name
+		return corrected_map
 
 	def load_tile_sets(self, filename):
 		try:
@@ -648,12 +965,16 @@ class MapGenerator(QWidget):
 		
 		self.scene.addItem(QGraphicsPixmapItem(pixmap))
 
+	def on_editor_closed(self):
+		self.edit_button.setEnabled(True)
+
 	def open_tile_set_editor(self):
 		self.editor = TileSetEditor(self.tile_sets, self)
 		self.editor.setWindowModality(Qt.ApplicationModal)
 		self.editor.show()
 		self.editor.raise_()
 		self.editor.activateWindow()
+		self.edit_button.setEnabled(False)
 
 	def select_color(self):
 		color = QColorDialog.getColor()
@@ -681,6 +1002,92 @@ class MapGenerator(QWidget):
 			TileSet("sand", 1, [], ["water"], QColor(252, 255, 148), False, "")
 		]
 		return default_tile_sets
+
+	def refresh_ui(self):
+		# Re-enable the edit button
+		self.edit_button.setEnabled(True)
+		
+		# Store all static UI elements that should be preserved
+		static_elements = [
+			# Method selector elements
+			(self.left_layout.itemAt(0).widget(), 0),  # Method label
+			(self.left_layout.itemAt(1).widget(), 1),  # Perlin radio
+			(self.left_layout.itemAt(2).widget(), 2),  # Random radio
+			
+			# Control elements (store their original positions)
+			(self.seed_label, -8),
+			(self.regenerate_button, -7),
+			(self.width_label, -6),
+			(self.width_slider, -5),
+			(self.height_label, -4),
+			(self.height_slider, -3),
+			(self.auto_adjust_checkbox, -2),
+			(self.generate_button, -1)
+		]
+		
+		# Temporarily remove all static elements
+		for widget, _ in static_elements:
+			self.left_layout.removeWidget(widget)
+			widget.setParent(None)  # Detach from layout but preserve widget
+			
+		# Clear existing percentage sliders and labels
+		while self.left_layout.count() > 0:
+			item = self.left_layout.takeAt(0)
+			if item.widget():
+				item.widget().deleteLater()
+		
+		# Clear the stored sliders and labels
+		self.percentage_sliders.clear()
+		self.percentage_labels.clear()
+		
+		# Restore method selector elements first
+		for widget, pos in static_elements[:3]:  # First 3 are method selector elements
+			self.left_layout.insertWidget(pos, widget)
+		
+		# Add new sliders and labels for each discoverable tile set
+		for tile_set in self.tile_sets:
+			if not tile_set.discoverable:
+				continue
+			
+			# Create and add label
+			label = QLabel(f'{tile_set.name.capitalize()}')
+			self.percentage_labels[tile_set.name] = label
+			self.left_layout.addWidget(label)
+			
+			# Create and add slider
+			slider = QSlider(Qt.Horizontal)
+			slider.setRange(0, 100)
+			slider.setValue(0)
+			slider.valueChanged.connect(self.update_labels)
+			self.percentage_sliders[tile_set.name] = slider
+			self.left_layout.addWidget(slider)
+		
+		# Restore remaining control elements in their original order
+		for widget, _ in static_elements[3:]:  # Skip method selector elements
+			self.left_layout.addWidget(widget)
+		
+		# Add back pathfinding controls
+		pathfinding_group = QGroupBox("Pathfinding Controls")
+		pathfinding_layout = QVBoxLayout()
+		pathfinding_layout.addWidget(self.path_mode_checkbox)
+		pathfinding_layout.addWidget(self.clear_path_button)
+		pathfinding_layout.addWidget(self.path_cost_label)
+		pathfinding_group.setLayout(pathfinding_layout)
+		self.left_layout.addWidget(pathfinding_group)
+		
+		# Add back the edit button
+		self.edit_button = QPushButton('Edit Tile Sets')
+		self.edit_button.clicked.connect(self.open_tile_set_editor)
+		self.left_layout.addWidget(self.edit_button)
+		
+		# Update labels
+		self.update_labels()
+		
+		# If there's a current map, redraw it with the updated tile sets
+		if self.current_map_data:
+			self.redraw_map()
+
+
 
 
 if __name__ == '__main__':
