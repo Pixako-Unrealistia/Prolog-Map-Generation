@@ -911,7 +911,13 @@ class MapGenerator(QWidget):
 				for x, cell in enumerate(row):
 					tile_set = next((ts for ts in self.tile_sets if ts.name == cell), None)
 					if tile_set:
-						color = tile_set.color
+						#color = tile_set.color
+						if tile_set.texture_path:
+							texture = QPixmap(tile_set.texture_path)
+							painter.drawPixmap(x * self.cell_size, y * self.cell_size, self.cell_size, self.cell_size, texture)
+							continue
+						else:
+							color = QColor(tile_set.color)
 					else:
 						color = QColor(0, 0, 0)
 					painter.fillRect(x * self.cell_size, y * self.cell_size, 
