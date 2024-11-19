@@ -1,5 +1,5 @@
 import sys
-from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QSlider, QLabel, QHBoxLayout, QCheckBox, QPushButton, QGridLayout, QGraphicsView, QGraphicsScene, QGraphicsPixmapItem, QSpinBox, QLineEdit, QColorDialog, QFileDialog, QComboBox, QScrollArea, QGroupBox, QRadioButton, QButtonGroup, QMessageBox
+from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QSlider, QLabel, QHBoxLayout, QCheckBox, QPushButton, QGridLayout, QGraphicsView, QGraphicsScene, QGraphicsPixmapItem, QSpinBox, QLineEdit, QColorDialog, QFileDialog, QComboBox, QScrollArea, QGroupBox, QRadioButton, QButtonGroup, QMessageBox, QListWidget, QListWidgetItem, QAbstractItemView
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QPainter, QPixmap, QPen
 from pyswip import Prolog
@@ -117,7 +117,7 @@ class TileSetEditor(QWidget):
 	def __init__(self, tile_sets, parent=None):
 		super().__init__(parent)
 		self.tile_sets = tile_sets
-		self.selected_color = None
+		self.selected_color = QColor(Qt.white)
 		self.is_new_tile = False
 		self.initUI()
 
@@ -158,15 +158,27 @@ class TileSetEditor(QWidget):
 
 		# Cannot Be Next To
 		form_layout.addWidget(QLabel('Cannot Be Next To:'), current_row, 0)
-		self.tile_set_cannot_be_next_to = QLineEdit()
-		self.tile_set_cannot_be_next_to.setPlaceholderText("Enter comma-separated values")
+		self.tile_set_cannot_be_next_to = QListWidget()
+		self.tile_set_cannot_be_next_to.setSelectionMode(QAbstractItemView.NoSelection)
+		self.tile_set_cannot_be_next_to.setFixedHeight(100)
+		for ts in self.tile_sets:
+			item = QListWidgetItem(ts.name)
+			item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+			item.setCheckState(Qt.Unchecked)
+			self.tile_set_cannot_be_next_to.addItem(item)
 		form_layout.addWidget(self.tile_set_cannot_be_next_to, current_row, 1)
 		current_row += 1
 
 		# Must Be Next To
 		form_layout.addWidget(QLabel('Must Be Next To:'), current_row, 0)
-		self.tile_set_must_be_next_to = QLineEdit()
-		self.tile_set_must_be_next_to.setPlaceholderText("Enter comma-separated values")
+		self.tile_set_must_be_next_to = QListWidget()
+		self.tile_set_must_be_next_to.setSelectionMode(QAbstractItemView.NoSelection)
+		self.tile_set_must_be_next_to.setFixedHeight(100)
+		for ts in self.tile_sets:
+			item = QListWidgetItem(ts.name)
+			item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+			item.setCheckState(Qt.Unchecked)
+			self.tile_set_must_be_next_to.addItem(item)
 		form_layout.addWidget(self.tile_set_must_be_next_to, current_row, 1)
 		current_row += 1
 
@@ -236,28 +248,33 @@ class TileSetEditor(QWidget):
 			tile_set = self.tile_sets[index]
 			self.tile_set_name.setText(tile_set.name)
 			self.tile_set_traversal_cost.setValue(tile_set.traversal_cost)
-			self.tile_set_cannot_be_next_to.setText(','.join(tile_set.cannot_be_next_to))
-			self.tile_set_must_be_next_to.setText(','.join(tile_set.must_be_next_to))
-			self.selected_color = tile_set.color
+
+			for i in range(self.tile_set_cannot_be_next_to.count()):
+				item = self.tile_set_cannot_be_next_to.item(i)
+				if item.text() in tile_set.cannot_be_next_to:
+					item.setCheckState(Qt.Checked)
+				else:
+					item.setCheckState(Qt.Unchecked)
+
+			for i in range(self.tile_set_must_be_next_to.count()):
+				item = self.tile_set_must_be_next_to.item(i)
+				if item.text() in tile_set.must_be_next_to:
+					item.setCheckState(Qt.Checked)
+				else:
+					item.setCheckState(Qt.Unchecked)
+
 			self.update_color_display(tile_set.color)
 			self.tile_set_discoverable.setChecked(tile_set.discoverable)
 			self.tile_set_texture_path.setText(tile_set.texture_path)
-		else:
-			self.tile_set_name.clear()
-			self.tile_set_traversal_cost.setValue(1)
-			self.tile_set_cannot_be_next_to.clear()
-			self.tile_set_must_be_next_to.clear()
-			self.selected_color = QColor(0, 0, 0)
-			self.update_color_display(self.selected_color)
-			self.tile_set_discoverable.setChecked(False)
-			self.tile_set_texture_path.clear()
 
 	def update_color_display(self, color):
 		self.tile_set_color.setStyleSheet(f'background-color: {color.name()}')
 		self.color_hex.setText(color.name())
 
 	def select_color(self):
-		color = QColorDialog.getColor(initial=self.selected_color)
+		if not self.selected_color:
+			self.selected_color = QColor(0, 0, 0)
+		color = QColorDialog.getColor(self.selected_color)
 		if color.isValid():
 			self.selected_color = color
 			self.update_color_display(color)
@@ -283,6 +300,14 @@ class TileSetEditor(QWidget):
 		self.tile_set_discoverable.setChecked(False)
 		self.tile_set_texture_path.clear()
 
+		for i in range(self.tile_set_cannot_be_next_to.count()):
+			item = self.tile_set_cannot_be_next_to.item(i)
+			item.setCheckState(Qt.Unchecked)
+
+		for i in range(self.tile_set_must_be_next_to.count()):
+			item = self.tile_set_must_be_next_to.item(i)
+			item.setCheckState(Qt.Unchecked)
+
 		self.is_new_tile = True
 
 		self.tile_set_list.blockSignals(True)
@@ -302,8 +327,20 @@ class TileSetEditor(QWidget):
 			return
 
 		traversal_cost = self.tile_set_traversal_cost.value()
-		cannot_be_next_to = [x.strip() for x in self.tile_set_cannot_be_next_to.text().split(',') if x.strip()]
-		must_be_next_to = [x.strip() for x in self.tile_set_must_be_next_to.text().split(',') if x.strip()]
+		
+		cannot_be_next_to = []
+		for i in range(self.tile_set_cannot_be_next_to.count()):
+			item = self.tile_set_cannot_be_next_to.item(i)
+			if item.checkState() == Qt.Checked:
+				cannot_be_next_to.append(item.text())
+
+		must_be_next_to = []
+		for i in range(self.tile_set_must_be_next_to.count()):
+			item = self.tile_set_must_be_next_to.item(i)
+			if item.checkState() == Qt.Checked:
+				must_be_next_to.append(item.text())
+
+
 		color = self.selected_color
 		discoverable = self.tile_set_discoverable.isChecked()
 		texture_path = self.tile_set_texture_path.text().strip()
