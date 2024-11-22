@@ -88,15 +88,16 @@ class GraphicViewOverloader(QGraphicsView):
 				self.drawing_active = True
 				if hasattr(parent, 'handle_map_click'):
 					parent.handle_map_click(event)
-		elif hasattr(parent, 'path_mode_checkbox') and parent.path_mode_checkbox.isChecked() and parent.current_map_data:
-			if hasattr(parent, 'handle_map_click'):
-				parent.handle_map_click(event)
-		else:
-			# Enable dragging
-			self.setDragMode(QGraphicsView.ScrollHandDrag)
-			self.drag_active = True
-			self.last_pos = event.position()
-			super().mousePressEvent(event)
+			elif hasattr(parent, 'path_mode_checkbox') and parent.path_mode_checkbox.isChecked() and parent.current_map_data:
+				# Allow pathfinding clicks to propagate
+				if hasattr(parent, 'handle_map_click'):
+					parent.handle_map_click(event)
+			else:
+				# Enable dragging for non-drawing, non-pathfinding clicks
+				self.setDragMode(QGraphicsView.ScrollHandDrag)
+				self.drag_active = True
+				self.last_pos = event.position()
+				super().mousePressEvent(event)
 
 	def mouseMoveEvent(self, event):
 		parent = self.parent()
