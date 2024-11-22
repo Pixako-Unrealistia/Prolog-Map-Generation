@@ -263,6 +263,7 @@ class TileSetEditor(QWidget):
 				else:
 					item.setCheckState(Qt.Unchecked)
 
+			self.selected_color = tile_set.color
 			self.update_color_display(tile_set.color)
 			self.tile_set_discoverable.setChecked(tile_set.discoverable)
 			self.tile_set_texture_path.setText(tile_set.texture_path)
@@ -431,13 +432,16 @@ class MapGenerator(QWidget):
 
 		# Generation switch
 		method_label = QLabel('Generation Method:')
+		self.seeded_radio = QRadioButton('Seeded Fillings')
 		self.perlin_radio = QRadioButton('Perlin Noise')
 		self.random_radio = QRadioButton('Pure Random')
 		self.perlin_radio.setChecked(True)  # Set Perlin as default
 		method_group = QButtonGroup(self)
+		method_group.addButton(self.seeded_radio)
 		method_group.addButton(self.perlin_radio)
 		method_group.addButton(self.random_radio)
 		left_layout.addWidget(method_label)
+		left_layout.addWidget(self.seeded_radio)
 		left_layout.addWidget(self.perlin_radio)
 		left_layout.addWidget(self.random_radio)
 
@@ -1017,8 +1021,9 @@ class MapGenerator(QWidget):
 		static_elements = [
 			# Method selector elements
 			(self.left_layout.itemAt(0).widget(), 0),  # Method label
-			(self.left_layout.itemAt(1).widget(), 1),  # Perlin radio
-			(self.left_layout.itemAt(2).widget(), 2),  # Random radio
+			(self.left_layout.itemAt(1).widget(), 1),  
+			(self.left_layout.itemAt(2).widget(), 2),  
+			(self.left_layout.itemAt(3).widget(), 3),  
 			
 			# Control elements (store their original positions)
 			(self.seed_label, -8),
@@ -1047,7 +1052,7 @@ class MapGenerator(QWidget):
 		self.percentage_labels.clear()
 		
 		# Restore method selector elements first
-		for widget, pos in static_elements[:3]:  # First 3 are method selector elements
+		for widget, pos in static_elements[:4]:  # First 3 are method selector elements
 			self.left_layout.insertWidget(pos, widget)
 		
 		# Add new sliders and labels for each discoverable tile set
@@ -1069,7 +1074,7 @@ class MapGenerator(QWidget):
 			self.left_layout.addWidget(slider)
 		
 		# Restore remaining control elements in their original order
-		for widget, _ in static_elements[3:]:  # Skip method selector elements
+		for widget, _ in static_elements[4:]:  # Skip method selector elements
 			self.left_layout.addWidget(widget)
 		
 		# Add back pathfinding controls

@@ -50,8 +50,7 @@ fade(T, Faded) :-
 lerp(T, A0, A1, Result) :-
 	Result is A0 + T * (A1 - A0).
 
-% Hash function to generate pseudo-random gradients.
-% This is based on the random hash function from the Perlin noise implementation in C++.
+% Hash function to generate pseudo-random gradients..
 random_hash(GlobalSeed, X, Y, Result) :-
 	Seed is GlobalSeed + X * 49632 + Y * 325176 + 1,
 	set_random(seed(Seed)),
@@ -84,7 +83,6 @@ select_tile([Tile-Cumulative|_], Value, Tile) :-
 select_tile([_|Rest], Value, Tile) :-
 	select_tile(Rest, Value, Tile).
 
-% TO DO: hook this to UI
 set_random_seed(GlobalSeed) :-
 	get_time(Time),
 	GlobalSeed is floor(Time * 1000).
