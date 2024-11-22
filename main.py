@@ -81,10 +81,13 @@ class GraphicViewOverloader(QGraphicsView):
 		self.last_pos = None
 
 	def mousePressEvent(self, event):
-		if hasattr(self.parent(), 'path_mode_checkbox') and self.parent().path_mode_checkbox.isChecked():
-			# Forward the event to the parent's handle_map_click
-			if hasattr(self.parent(), 'handle_map_click'):
-				self.parent().handle_map_click(event)
+		parent = self.parent()
+		if hasattr(parent, 'seeded_radio') and parent.seeded_radio.isChecked() and parent.seeded_seeds is not None:
+			if hasattr(parent, 'handle_map_click'):
+				parent.handle_map_click(event)
+		elif hasattr(parent, 'path_mode_checkbox') and parent.path_mode_checkbox.isChecked() and parent.current_map_data:
+			if hasattr(parent, 'handle_map_click'):
+				parent.handle_map_click(event)
 		else:
 			# Enable dragging
 			self.setDragMode(QGraphicsView.ScrollHandDrag)
@@ -96,10 +99,12 @@ class GraphicViewOverloader(QGraphicsView):
 		if self.drag_active:
 			self.setDragMode(QGraphicsView.NoDrag)
 			self.drag_active = False
-			super().mouseReleaseEvent(event)
+		super().mouseReleaseEvent(event)
 
 	def mouseMoveEvent(self, event):
 		if self.drag_active:
+			super().mouseMoveEvent(event)
+		else:
 			super().mouseMoveEvent(event)
 
 	def wheelEvent(self, event):
@@ -517,10 +522,15 @@ class MapGenerator(QWidget):
 		self.edit_button.clicked.connect(self.open_tile_set_editor)
 		left_layout.addWidget(self.edit_button)
 
+		self.seeded_radio.toggled.connect(self.on_generation_method_changed)
+		self.paint_tile_combo = None
+		self.clear_seeds_button = None
+
+
 		# Add the left panel to the main layout
 		layout.addLayout(left_layout)
 
-		# Update map_display initialization
+		#Update map_display initialization
 		self.map_display = GraphicViewOverloader()
 		self.map_display.setFixedSize(500, 500)
 		self.map_display.setRenderHint(QPainter.Antialiasing)
@@ -528,7 +538,7 @@ class MapGenerator(QWidget):
 
 		# Right panel (map display)
 		right_layout = QVBoxLayout()
-		self.map_display = GraphicViewOverloader()
+		self.map_display = GraphicViewOverloader(self)
 		self.map_display.setFixedSize(500, 500)
 		self.map_display.setRenderHint(QPainter.Antialiasing)
 		self.map_display.setDragMode(QGraphicsView.ScrollHandDrag)
@@ -730,15 +740,21 @@ class MapGenerator(QWidget):
 
 		percentages_list = [f'{name}-{percentages[name]}' for name in percentages]
 
-		# Call Prolog to generate the map
-		if self.perlin_radio.isChecked():
+		if self.seeded_radio.isChecked():
+			seeds_list = []
+			for y in range(height):
+				for x in range(width):
+					tile_name = self.seeded_seeds[y][x]
+					if tile_name:
+						seeds_list.append(f"pos({x}, {y}, '{tile_name}')")
+			seeds_str = '[' + ', '.join(seeds_list) + ']'
+			query = f"generate_map_with_seeds({width}, {height}, [{', '.join(percentages_list)}], {seeds_str}, Map)"
+		elif self.perlin_radio.isChecked():
 			query = f"generate_map({width}, {height}, [{', '.join(percentages_list)}], Map)"
 		else:
 			query = f"legacy_generate_map({width}, {height}, [{', '.join(percentages_list)}], Map)"
 
 		result = list(self.prolog.query(query))
-
-		print(result)
 
 		if result:
 			map_data = result[0]['Map']
@@ -1099,6 +1115,109 @@ class MapGenerator(QWidget):
 			self.redraw_map()
 
 
+	#3.0
+
+	def on_generation_method_changed(self, checked):
+		if self.seeded_radio.isChecked():
+			self.enable_painting_tool()
+		else:
+			self.disable_painting_tool()
+
+	def enable_painting_tool(self):
+		if not self.paint_tile_combo:
+			self.paint_tile_combo = QComboBox()
+			self.paint_tile_combo.addItems([tile_set.name for tile_set in self.tile_sets])
+			self.left_layout.insertWidget(4, self.paint_tile_combo)
+
+			self.clear_seeds_button = QPushButton('Clear Seeds')
+			self.clear_seeds_button.clicked.connect(self.clear_seeds)
+			self.left_layout.insertWidget(5, self.clear_seeds_button)
+
+		else:
+			self.paint_tile_combo.show()
+			self.clear_seeds_button.show()
+
+		width = self.width_slider.value()
+		height = self.height_slider.value()
+		self.seeded_seeds = [['' for _ in range(width)] for _ in range(height)]
+		self.display_blank_map(width, height)
+
+	def disable_painting_tool(self):
+		if self.paint_tile_combo:
+			self.paint_tile_combo.hide()
+			self.clear_seeds_button.hide()
+		self.seeded_seeds = None
+		self.scene.clear()
+
+	def handle_map_click(self, event):
+		if self.seeded_radio.isChecked() and self.seeded_seeds is not None:
+			view_pos = event.position()
+			scene_pos = self.map_display.mapToScene(view_pos.toPoint())
+
+			x = int(scene_pos.x() / self.cell_size)
+			y = int(scene_pos.y() / self.cell_size)
+
+			if 0 <= x < len(self.seeded_seeds[0]) and 0 <= y < len(self.seeded_seeds):
+				tile_name = self.paint_tile_combo.currentText()
+				self.seeded_seeds[y][x] = tile_name
+				self.display_seed_map()
+		elif self.path_mode_checkbox.isChecked() and self.current_map_data:
+			view_pos = event.position()
+			scene_pos = self.map_display.mapToScene(view_pos.toPoint())
+
+			x = int(scene_pos.x() / self.cell_size)
+			y = int(scene_pos.y() / self.cell_size)
+
+			if 0 <= x < len(self.current_map_data[0]) and 0 <= y < len(self.current_map_data):
+				if not self.start_pos:
+					self.start_pos = (x, y)
+					self.redraw_map()
+				elif not self.end_pos:
+					self.end_pos = (x, y)
+					self.find_and_draw_path()
+				else:
+					self.start_pos = (x, y)
+					self.end_pos = None
+					self.current_path = None
+					self.path_cost_label.setText("Path Cost: N/A")
+					self.redraw_map()
+		else:
+			pass
+
+	def display_blank_map(self, width, height):
+		self.scene.clear()
+		self.current_map_data = None
+		self.cell_size = min(self.map_display.width() // width, self.map_display.height() // height)
+		pixmap = QPixmap(width * self.cell_size, height * self.cell_size)
+		pixmap.fill(Qt.white)
+		self.scene.addItem(QGraphicsPixmapItem(pixmap))
+
+	def display_seed_map(self):
+		self.scene.clear()
+		width = len(self.seeded_seeds[0])
+		height = len(self.seeded_seeds)
+		pixmap = QPixmap(width * self.cell_size, height * self.cell_size)
+		pixmap.fill(Qt.white)
+		painter = QPainter(pixmap)
+		try:
+			for y in range(height):
+				for x in range(width):
+					tile_name = self.seeded_seeds[y][x]
+					if tile_name:
+						tile_set = next((ts for ts in self.tile_sets if ts.name == tile_name), None)
+						if tile_set:
+							color = tile_set.color
+							painter.fillRect(x * self.cell_size, y * self.cell_size,
+											self.cell_size, self.cell_size, color)
+		finally:
+			painter.end()
+		self.scene.addItem(QGraphicsPixmapItem(pixmap))
+
+	def clear_seeds(self):
+		width = self.width_slider.value()
+		height = self.height_slider.value()
+		self.seeded_seeds = [['' for _ in range(width)] for _ in range(height)]
+		self.display_blank_map(width, height)
 
 
 if __name__ == '__main__':
