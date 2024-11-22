@@ -419,6 +419,7 @@ class MapGenerator(QWidget):
 		self.prolog = Prolog()
 
 		self.tile_sets = []
+		self.locked_tiles = {}
 		self.load_tile_sets("tile_sets.json")
 		self.json_to_prolog("tile_sets.json", "tile_sets.pl")
 		
@@ -690,17 +691,33 @@ class MapGenerator(QWidget):
 	def zoom_out(self):
 		self.map_display.scale(1 / 1.2, 1 / 1.2)
 
-	def update_labels(self):
-		total = sum(slider.value() for slider in self.percentage_sliders.values())
-		if total > 100 and self.auto_adjust_checkbox.isChecked():
-			excess = total - 100
-			for slider in self.percentage_sliders.values():
-				if slider.value() > excess:
-					slider.setValue(slider.value() - excess)
-					break
+	#def update_labels(self):
+	#	total = sum(slider.value() for slider in self.percentage_sliders.values())
+	#	if total > 100 and self.auto_adjust_checkbox.isChecked():
+	#		excess = total - 100
+	#		for slider in self.percentage_sliders.values():
+	#			if slider.value() > excess:
+	#				slider.setValue(slider.value() - excess)
+	#				break
 
+	#	for name, slider in self.percentage_sliders.items():
+	#		self.percentage_labels[name].setText(f'{name.capitalize()} Percentage: {slider.value()}%')
+
+	#	self.width_label.setText(f'Width: {self.width_slider.value()}')
+	#	self.height_label.setText(f'Height: {self.height_slider.value()}')
+
+	# This one regressed so that it doesn't perform push back
+	def update_labels(self):
+		# Update labels for each slider
 		for name, slider in self.percentage_sliders.items():
 			self.percentage_labels[name].setText(f'{name.capitalize()} Percentage: {slider.value()}%')
+
+		total = sum(slider.value() for slider in self.percentage_sliders.values())
+
+		for name, slider in self.percentage_sliders.items():
+			other_sliders_total = total - slider.value()
+			max_value = 100 - other_sliders_total
+			slider.setMaximum(max_value)
 
 		self.width_label.setText(f'Width: {self.width_slider.value()}')
 		self.height_label.setText(f'Height: {self.height_slider.value()}')
@@ -723,6 +740,10 @@ class MapGenerator(QWidget):
 		if sum(percentages.values()) != 100:
 			QMessageBox.warning(self, "Percentage Error", "The sum of all percentages must be 100.")
 			return
+
+		for slider in self.percentage_sliders.values():
+			slider.setEnabled(True)
+		self.locked_tiles.clear()
 
 		if self.seeded_radio.isChecked():
 			# Initialize map with seeds and None for empty tiles
@@ -1179,6 +1200,8 @@ class MapGenerator(QWidget):
 				tile_name = self.paint_tile_combo.currentText()
 				self.seeded_seeds[y][x] = tile_name
 				self.display_seed_map()
+				self.lock_tile_threshold(tile_name)
+				self.adjust_threshold_percentages()
 		elif self.path_mode_checkbox.isChecked() and self.current_map_data:
 			view_pos = event.position()
 			scene_pos = self.map_display.mapToScene(view_pos.toPoint())
@@ -1201,6 +1224,22 @@ class MapGenerator(QWidget):
 					self.redraw_map()
 		else:
 			pass
+
+
+	def lock_tile_threshold(self, tile_name):
+		if tile_name not in self.locked_tiles:
+			self.locked_tiles[tile_name] = 0
+		self.locked_tiles[tile_name] += 1
+
+	def adjust_threshold_percentages(self):
+		width = self.width_slider.value()
+		height = self.height_slider.value()
+		total_tiles = width * height
+		for tile_name, count in self.locked_tiles.items():
+			percentage = (count / total_tiles) * 100
+			self.percentage_sliders[tile_name].setValue(int(percentage))
+			self.percentage_sliders[tile_name].setEnabled(False)
+
 
 	def display_blank_map(self, width, height):
 		self.scene.clear()
@@ -1262,7 +1301,14 @@ class MapGenerator(QWidget):
 		width = self.width_slider.value()
 		height = self.height_slider.value()
 		self.seeded_seeds = [['' for _ in range(width)] for _ in range(height)]
+
+		for slider in self.percentage_sliders.values():
+			slider.setEnabled(True)
+		for name in self.percentage_sliders:
+			self.percentage_sliders[name].setValue(0)
+		self.locked_tiles.clear()
 		self.display_blank_map(width, height)
+		
 
 	def fill_empty_tiles(self, map_data, percentages):
 		tiles = []
