@@ -68,66 +68,66 @@ class TileStructure:
 
 
 class GraphicViewOverloader(QGraphicsView):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setRenderHint(QPainter.Antialiasing)
-        self.setTransformationAnchor(QGraphicsView.AnchorUnderMouse)
-        self.setResizeAnchor(QGraphicsView.AnchorUnderMouse)
-        self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
-        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
-        self.setInteractive(True)
-        self.setViewportUpdateMode(QGraphicsView.FullViewportUpdate)
-        self.drag_active = False
-        self.drawing_active = False
-        self.last_pos = None
+	def __init__(self, parent=None):
+		super().__init__(parent)
+		self.setRenderHint(QPainter.Antialiasing)
+		self.setTransformationAnchor(QGraphicsView.AnchorUnderMouse)
+		self.setResizeAnchor(QGraphicsView.AnchorUnderMouse)
+		self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
+		self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
+		self.setInteractive(True)
+		self.setViewportUpdateMode(QGraphicsView.FullViewportUpdate)
+		self.drag_active = False
+		self.drawing_active = False
+		self.last_pos = None
 
-    def mousePressEvent(self, event):
-        parent = self.parent()
-        if event.button() == Qt.LeftButton:
-            if hasattr(parent, 'seeded_radio') and parent.seeded_radio.isChecked() and parent.seeded_seeds is not None:
-                self.drawing_active = True
-                if hasattr(parent, 'handle_map_click'):
-                    parent.handle_map_click(event)
-        elif hasattr(parent, 'path_mode_checkbox') and parent.path_mode_checkbox.isChecked() and parent.current_map_data:
-            if hasattr(parent, 'handle_map_click'):
-                parent.handle_map_click(event)
-        else:
-            # Enable dragging
-            self.setDragMode(QGraphicsView.ScrollHandDrag)
-            self.drag_active = True
-            self.last_pos = event.position()
-            super().mousePressEvent(event)
+	def mousePressEvent(self, event):
+		parent = self.parent()
+		if event.button() == Qt.LeftButton:
+			if hasattr(parent, 'seeded_radio') and parent.seeded_radio.isChecked() and parent.seeded_seeds is not None:
+				self.drawing_active = True
+				if hasattr(parent, 'handle_map_click'):
+					parent.handle_map_click(event)
+		elif hasattr(parent, 'path_mode_checkbox') and parent.path_mode_checkbox.isChecked() and parent.current_map_data:
+			if hasattr(parent, 'handle_map_click'):
+				parent.handle_map_click(event)
+		else:
+			# Enable dragging
+			self.setDragMode(QGraphicsView.ScrollHandDrag)
+			self.drag_active = True
+			self.last_pos = event.position()
+			super().mousePressEvent(event)
 
-    def mouseMoveEvent(self, event):
-        parent = self.parent()
-        if self.drawing_active:
-            if hasattr(parent, 'seeded_radio') and parent.seeded_radio.isChecked() and parent.seeded_seeds is not None:
-                if hasattr(parent, 'handle_map_click'):
-                    parent.handle_map_click(event)
-        elif self.drag_active:
-            super().mouseMoveEvent(event)
-        else:
-            super().mouseMoveEvent(event)
+	def mouseMoveEvent(self, event):
+		parent = self.parent()
+		if self.drawing_active:
+			if hasattr(parent, 'seeded_radio') and parent.seeded_radio.isChecked() and parent.seeded_seeds is not None:
+				if hasattr(parent, 'handle_map_click'):
+					parent.handle_map_click(event)
+		elif self.drag_active:
+			super().mouseMoveEvent(event)
+		else:
+			super().mouseMoveEvent(event)
 
-    def mouseReleaseEvent(self, event):
-        if event.button() == Qt.LeftButton:
-            if self.drawing_active:
-                self.drawing_active = False
-        if self.drag_active:
-            self.setDragMode(QGraphicsView.NoDrag)
-            self.drag_active = False
-        super().mouseReleaseEvent(event)
+	def mouseReleaseEvent(self, event):
+		if event.button() == Qt.LeftButton:
+			if self.drawing_active:
+				self.drawing_active = False
+		if self.drag_active:
+			self.setDragMode(QGraphicsView.NoDrag)
+			self.drag_active = False
+		super().mouseReleaseEvent(event)
 
-    def wheelEvent(self, event):
-        zoom_in_factor = 1.2
-        zoom_out_factor = 1 / zoom_in_factor
+	def wheelEvent(self, event):
+		zoom_in_factor = 1.2
+		zoom_out_factor = 1 / zoom_in_factor
 
-        if event.angleDelta().y() > 0:
-            zoom_factor = zoom_in_factor
-        else:
-            zoom_factor = zoom_out_factor
+		if event.angleDelta().y() > 0:
+			zoom_factor = zoom_in_factor
+		else:
+			zoom_factor = zoom_out_factor
 
-        self.scale(zoom_factor, zoom_factor)
+		self.scale(zoom_factor, zoom_factor)
 
 class TileSetEditor(QWidget):
 	def __init__(self, tile_sets, parent=None):
@@ -581,43 +581,6 @@ class MapGenerator(QWidget):
 		self.setLayout(layout)
 		self.setWindowTitle('Map Generator')
 
-	def handle_map_click(self, event):
-		if self.seeded_radio.isChecked() and self.seeded_seeds is not None:
-			view_pos = event.position()
-			scene_pos = self.map_display.mapToScene(view_pos.toPoint())
-
-			x = int(scene_pos.x() / self.cell_size)
-			y = int(scene_pos.y() / self.cell_size)
-
-			if 0 <= x < len(self.seeded_seeds[0]) and 0 <= y < len(self.seeded_seeds):
-				tile_name = self.paint_tile_combo.currentText()
-				self.seeded_seeds[y][x] = tile_name
-				self.display_seed_map()
-		elif self.path_mode_checkbox.isChecked() and self.current_map_data:
-			if event.type() == QMouseEvent.MouseButtonPress:
-				view_pos = event.position()
-				scene_pos = self.map_display.mapToScene(view_pos.toPoint())
-
-				x = int(scene_pos.x() / self.cell_size)
-				y = int(scene_pos.y() / self.cell_size)
-
-				if 0 <= x < len(self.current_map_data[0]) and 0 <= y < len(self.current_map_data):
-					if not self.start_pos:
-						self.start_pos = (x, y)
-						self.redraw_map()
-					elif not self.end_pos:
-						self.end_pos = (x, y)
-						self.find_and_draw_path()
-					else:
-						self.start_pos = (x, y)
-						self.end_pos = None
-						self.current_path = None
-						self.path_cost_label.setText("Path Cost: N/A")
-						self.redraw_map()
-		else:
-			pass
-
-
 	def find_and_draw_path(self):
 		if not self.start_pos or not self.end_pos or not self.current_map_data:
 			print("[DEBUG] Missing required data for pathfinding")
@@ -758,33 +721,45 @@ class MapGenerator(QWidget):
 		percentages = {name: slider.value() for name, slider in self.percentage_sliders.items()}
 
 		if sum(percentages.values()) != 100:
-			raise ValueError("The sum of all percentages must be 100.")
-
-		percentages_list = [f'{name}-{percentages[name]}' for name in percentages]
+			QMessageBox.warning(self, "Percentage Error", "The sum of all percentages must be 100.")
+			return
 
 		if self.seeded_radio.isChecked():
-			seeds_list = []
+			# Initialize map with seeds and None for empty tiles
+			map_data = []
 			for y in range(height):
+				row = []
 				for x in range(width):
 					tile_name = self.seeded_seeds[y][x]
 					if tile_name:
-						seeds_list.append(f"pos({x}, {y}, '{tile_name}')")
-			seeds_str = '[' + ', '.join(seeds_list) + ']'
-			query = f"generate_map_with_seeds({width}, {height}, [{', '.join(percentages_list)}], {seeds_str}, Map)"
+						row.append(tile_name)
+					else:
+						row.append(None)
+				map_data.append(row)
+
+			# Fill empty tiles
+			self.fill_empty_tiles(map_data, percentages)
+			self.current_map_data = map_data
+			self.redraw_map()
 		elif self.perlin_radio.isChecked():
+			percentages_list = [f'{name}-{percentages[name]}' for name in percentages if percentages[name] > 0]
 			query = f"generate_map({width}, {height}, [{', '.join(percentages_list)}], Map)"
-		else:
-			query = f"legacy_generate_map({width}, {height}, [{', '.join(percentages_list)}], Map)"
-
-		result = list(self.prolog.query(query))
-
-		if result:
-			map_data = result[0]['Map']
-			if self.perlin_radio.isChecked():
+			result = list(self.prolog.query(query))
+			if result:
+				map_data = result[0]['Map']
 				map_data = self.correct_map(map_data)
-			self.display_map(map_data)
+				self.display_map(map_data)
+			else:
+				print("No result from Prolog query")
 		else:
-			print("No result from Prolog query")
+			percentages_list = [f'{name}-{percentages[name]}' for name in percentages if percentages[name] > 0]
+			query = f"legacy_generate_map({width}, {height}, [{', '.join(percentages_list)}], Map)"
+			result = list(self.prolog.query(query))
+			if result:
+				map_data = result[0]['Map']
+				self.display_map(map_data)
+			else:
+				print("No result from Prolog query")
 
 	def correct_map(self, map_data):
 		height = len(map_data)
@@ -937,15 +912,19 @@ class MapGenerator(QWidget):
 	def redraw_map(self):
 		if not self.current_map_data:
 			return
-			
+
 		self.scene.clear()
 		width = len(self.current_map_data[0])
 		height = len(self.current_map_data)
-		self.cell_size = min(self.map_display.width() // width, self.map_display.height() // height)
-		
-		pixmap = QPixmap(width * self.cell_size, height * self.cell_size)
+		border_thickness = 2
+		self.cell_size = min(
+			(self.map_display.width() - border_thickness * 2) // width,
+			(self.map_display.height() - border_thickness * 2) // height
+		)
+
+		pixmap = QPixmap(width * self.cell_size + border_thickness * 2, height * self.cell_size + border_thickness * 2)
 		pixmap.fill(Qt.white)
-		
+
 		painter = QPainter(pixmap)
 		try:
 			# Draw tiles
@@ -953,64 +932,75 @@ class MapGenerator(QWidget):
 				for x, cell in enumerate(row):
 					tile_set = next((ts for ts in self.tile_sets if ts.name == cell), None)
 					if tile_set:
-						#color = tile_set.color
 						if tile_set.texture_path:
 							texture = QPixmap(tile_set.texture_path)
-							painter.drawPixmap(x * self.cell_size, y * self.cell_size, self.cell_size, self.cell_size, texture)
-							continue
+							painter.drawPixmap(
+								x * self.cell_size + border_thickness,
+								y * self.cell_size + border_thickness,
+								self.cell_size,
+								self.cell_size,
+								texture
+							)
 						else:
 							color = QColor(tile_set.color)
+							painter.fillRect(
+								x * self.cell_size + border_thickness,
+								y * self.cell_size + border_thickness,
+								self.cell_size,
+								self.cell_size,
+								color
+							)
 					else:
-						color = QColor(0, 0, 0)
-					painter.fillRect(x * self.cell_size, y * self.cell_size, 
-								self.cell_size, self.cell_size, color)
-			
-			# Draw start and end points
+						painter.fillRect(
+							x * self.cell_size + border_thickness,
+							y * self.cell_size + border_thickness,
+							self.cell_size,
+							self.cell_size,
+							QColor(0, 0, 0)
+						)
+
+			# Draw border
+			pen = QPen(Qt.black, border_thickness)
+			painter.setPen(pen)
+			painter.drawRect(0, 0, pixmap.width() - 1, pixmap.height() - 1)
+
+			# Draw start and end points (if any)
 			if self.start_pos:
 				painter.setBrush(QColor(255, 0, 0))  # Red for start
 				painter.setPen(Qt.NoPen)
 				painter.drawEllipse(
-					self.start_pos[0] * self.cell_size + self.cell_size//4,
-					self.start_pos[1] * self.cell_size + self.cell_size//4,
-					self.cell_size//2, self.cell_size//2
+					self.start_pos[0] * self.cell_size + self.cell_size // 4 + border_thickness,
+					self.start_pos[1] * self.cell_size + self.cell_size // 4 + border_thickness,
+					self.cell_size // 2, self.cell_size // 2
 				)
-			
+
 			if self.end_pos:
 				painter.setBrush(QColor(0, 255, 0))  # Green for end
 				painter.setPen(Qt.NoPen)
 				painter.drawEllipse(
-					self.end_pos[0] * self.cell_size + self.cell_size//4,
-					self.end_pos[1] * self.cell_size + self.cell_size//4,
-					self.cell_size//2, self.cell_size//2
+					self.end_pos[0] * self.cell_size + self.cell_size // 4 + border_thickness,
+					self.end_pos[1] * self.cell_size + self.cell_size // 4 + border_thickness,
+					self.cell_size // 2, self.cell_size // 2
 				)
-			
-			# Draw path
+
+			# Draw path (if any)
 			if self.current_path:
-				painter.setPen(QPen(QColor(255, 255, 255), self.cell_size//4))  # White path
+				path_pen = QPen(QColor(255, 255, 255), max(2, self.cell_size // 4))
+				path_pen.setCapStyle(Qt.RoundCap)
+				painter.setPen(path_pen)
+
 				for i in range(len(self.current_path) - 1):
 					x1, y1 = self.current_path[i]
 					x2, y2 = self.current_path[i + 1]
 					painter.drawLine(
-						x1 * self.cell_size + self.cell_size//2,
-						y1 * self.cell_size + self.cell_size//2,
-						x2 * self.cell_size + self.cell_size//2,
-						y2 * self.cell_size + self.cell_size//2
-					)
-				
-				# Draw path outline
-				painter.setPen(QPen(QColor(0, 0, 0), self.cell_size//4 + 2))  # Black outline
-				for i in range(len(self.current_path) - 1):
-					x1, y1 = self.current_path[i]
-					x2, y2 = self.current_path[i + 1]
-					painter.drawLine(
-						x1 * self.cell_size + self.cell_size//2,
-						y1 * self.cell_size + self.cell_size//2,
-						x2 * self.cell_size + self.cell_size//2,
-						y2 * self.cell_size + self.cell_size//2
+						x1 * self.cell_size + self.cell_size // 2 + border_thickness,
+						y1 * self.cell_size + self.cell_size // 2 + border_thickness,
+						x2 * self.cell_size + self.cell_size // 2 + border_thickness,
+						y2 * self.cell_size + self.cell_size // 2 + border_thickness
 					)
 		finally:
 			painter.end()
-		
+
 		self.scene.addItem(QGraphicsPixmapItem(pixmap))
 
 	def on_editor_closed(self):
@@ -1090,7 +1080,7 @@ class MapGenerator(QWidget):
 		self.percentage_labels.clear()
 		
 		# Restore method selector elements first
-		for widget, pos in static_elements[:4]:  # First 3 are method selector elements
+		for widget, pos in static_elements[:4]:  # First 4 are method selector elements
 			self.left_layout.insertWidget(pos, widget)
 		
 		# Add new sliders and labels for each discoverable tile set
@@ -1131,6 +1121,12 @@ class MapGenerator(QWidget):
 		
 		# Update labels
 		self.update_labels()
+		
+		# Re-enable painting tool if in 'Seeded Fillings' mode
+		if self.seeded_radio.isChecked():
+			self.enable_painting_tool()
+		else:
+			self.disable_painting_tool()
 		
 		# If there's a current map, redraw it with the updated tile sets
 		if self.current_map_data:
@@ -1268,6 +1264,27 @@ class MapGenerator(QWidget):
 		self.seeded_seeds = [['' for _ in range(width)] for _ in range(height)]
 		self.display_blank_map(width, height)
 
+	def fill_empty_tiles(self, map_data, percentages):
+		tiles = []
+		cumulative_weights = []
+		total = 0
+		for name, percent in percentages.items():
+			if percent > 0:
+				tiles.append(name)
+				total += percent
+				cumulative_weights.append(total)
+
+		height = len(map_data)
+		width = len(map_data[0])
+
+		for y in range(height):
+			for x in range(width):
+				if map_data[y][x] is None:
+					rand = random.uniform(0, 100)
+					for i, cw in enumerate(cumulative_weights):
+						if rand <= cw:
+							map_data[y][x] = tiles[i]
+							break
 
 if __name__ == '__main__':
 	app = QApplication(sys.argv)
