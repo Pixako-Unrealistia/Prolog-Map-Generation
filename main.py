@@ -68,55 +68,66 @@ class TileStructure:
 
 
 class GraphicViewOverloader(QGraphicsView):
-	def __init__(self, parent=None):
-		super().__init__(parent)
-		self.setRenderHint(QPainter.Antialiasing)
-		self.setTransformationAnchor(QGraphicsView.AnchorUnderMouse)
-		self.setResizeAnchor(QGraphicsView.AnchorUnderMouse)
-		self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
-		self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
-		self.setInteractive(True)
-		self.setViewportUpdateMode(QGraphicsView.FullViewportUpdate)
-		self.drag_active = False
-		self.last_pos = None
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setRenderHint(QPainter.Antialiasing)
+        self.setTransformationAnchor(QGraphicsView.AnchorUnderMouse)
+        self.setResizeAnchor(QGraphicsView.AnchorUnderMouse)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
+        self.setInteractive(True)
+        self.setViewportUpdateMode(QGraphicsView.FullViewportUpdate)
+        self.drag_active = False
+        self.drawing_active = False
+        self.last_pos = None
 
-	def mousePressEvent(self, event):
-		parent = self.parent()
-		if hasattr(parent, 'seeded_radio') and parent.seeded_radio.isChecked() and parent.seeded_seeds is not None:
-			if hasattr(parent, 'handle_map_click'):
-				parent.handle_map_click(event)
-		elif hasattr(parent, 'path_mode_checkbox') and parent.path_mode_checkbox.isChecked() and parent.current_map_data:
-			if hasattr(parent, 'handle_map_click'):
-				parent.handle_map_click(event)
-		else:
-			# Enable dragging
-			self.setDragMode(QGraphicsView.ScrollHandDrag)
-			self.drag_active = True
-			self.last_pos = event.position()
-			super().mousePressEvent(event)
+    def mousePressEvent(self, event):
+        parent = self.parent()
+        if event.button() == Qt.LeftButton:
+            if hasattr(parent, 'seeded_radio') and parent.seeded_radio.isChecked() and parent.seeded_seeds is not None:
+                self.drawing_active = True
+                if hasattr(parent, 'handle_map_click'):
+                    parent.handle_map_click(event)
+        elif hasattr(parent, 'path_mode_checkbox') and parent.path_mode_checkbox.isChecked() and parent.current_map_data:
+            if hasattr(parent, 'handle_map_click'):
+                parent.handle_map_click(event)
+        else:
+            # Enable dragging
+            self.setDragMode(QGraphicsView.ScrollHandDrag)
+            self.drag_active = True
+            self.last_pos = event.position()
+            super().mousePressEvent(event)
 
-	def mouseReleaseEvent(self, event):
-		if self.drag_active:
-			self.setDragMode(QGraphicsView.NoDrag)
-			self.drag_active = False
-		super().mouseReleaseEvent(event)
+    def mouseMoveEvent(self, event):
+        parent = self.parent()
+        if self.drawing_active:
+            if hasattr(parent, 'seeded_radio') and parent.seeded_radio.isChecked() and parent.seeded_seeds is not None:
+                if hasattr(parent, 'handle_map_click'):
+                    parent.handle_map_click(event)
+        elif self.drag_active:
+            super().mouseMoveEvent(event)
+        else:
+            super().mouseMoveEvent(event)
 
-	def mouseMoveEvent(self, event):
-		if self.drag_active:
-			super().mouseMoveEvent(event)
-		else:
-			super().mouseMoveEvent(event)
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            if self.drawing_active:
+                self.drawing_active = False
+        if self.drag_active:
+            self.setDragMode(QGraphicsView.NoDrag)
+            self.drag_active = False
+        super().mouseReleaseEvent(event)
 
-	def wheelEvent(self, event):
-		zoom_in_factor = 1.2
-		zoom_out_factor = 1 / zoom_in_factor
+    def wheelEvent(self, event):
+        zoom_in_factor = 1.2
+        zoom_out_factor = 1 / zoom_in_factor
 
-		if event.angleDelta().y() > 0:
-			zoom_factor = zoom_in_factor
-		else:
-			zoom_factor = zoom_out_factor
+        if event.angleDelta().y() > 0:
+            zoom_factor = zoom_in_factor
+        else:
+            zoom_factor = zoom_out_factor
 
-		self.scale(zoom_factor, zoom_factor)
+        self.scale(zoom_factor, zoom_factor)
 
 class TileSetEditor(QWidget):
 	def __init__(self, tile_sets, parent=None):
@@ -571,30 +582,41 @@ class MapGenerator(QWidget):
 		self.setWindowTitle('Map Generator')
 
 	def handle_map_click(self, event):
-		if not self.path_mode_checkbox.isChecked() or not self.current_map_data:
-			return
-			
-		# Use position() instead of pos() and handle QPointF directly
-		view_pos = event.position()
-		scene_pos = self.map_display.mapToScene(view_pos.toPoint())
-		
-		x = int(scene_pos.x() / self.cell_size)
-		y = int(scene_pos.y() / self.cell_size)
-		
-		# Ensure click is within map bounds
-		if 0 <= x < len(self.current_map_data[0]) and 0 <= y < len(self.current_map_data):
-			if not self.start_pos:
-				self.start_pos = (x, y)
-				self.redraw_map()
-			elif not self.end_pos:
-				self.end_pos = (x, y)
-				self.find_and_draw_path()
-			else:
-				self.start_pos = (x, y)
-				self.end_pos = None
-				self.current_path = None
-				self.path_cost_label.setText("Path Cost: N/A")
-				self.redraw_map()
+		if self.seeded_radio.isChecked() and self.seeded_seeds is not None:
+			view_pos = event.position()
+			scene_pos = self.map_display.mapToScene(view_pos.toPoint())
+
+			x = int(scene_pos.x() / self.cell_size)
+			y = int(scene_pos.y() / self.cell_size)
+
+			if 0 <= x < len(self.seeded_seeds[0]) and 0 <= y < len(self.seeded_seeds):
+				tile_name = self.paint_tile_combo.currentText()
+				self.seeded_seeds[y][x] = tile_name
+				self.display_seed_map()
+		elif self.path_mode_checkbox.isChecked() and self.current_map_data:
+			if event.type() == QMouseEvent.MouseButtonPress:
+				view_pos = event.position()
+				scene_pos = self.map_display.mapToScene(view_pos.toPoint())
+
+				x = int(scene_pos.x() / self.cell_size)
+				y = int(scene_pos.y() / self.cell_size)
+
+				if 0 <= x < len(self.current_map_data[0]) and 0 <= y < len(self.current_map_data):
+					if not self.start_pos:
+						self.start_pos = (x, y)
+						self.redraw_map()
+					elif not self.end_pos:
+						self.end_pos = (x, y)
+						self.find_and_draw_path()
+					else:
+						self.start_pos = (x, y)
+						self.end_pos = None
+						self.current_path = None
+						self.path_cost_label.setText("Path Cost: N/A")
+						self.redraw_map()
+		else:
+			pass
+
 
 	def find_and_draw_path(self):
 		if not self.start_pos or not self.end_pos or not self.current_map_data:
@@ -1187,19 +1209,37 @@ class MapGenerator(QWidget):
 	def display_blank_map(self, width, height):
 		self.scene.clear()
 		self.current_map_data = None
-		self.cell_size = min(self.map_display.width() // width, self.map_display.height() // height)
-		pixmap = QPixmap(width * self.cell_size, height * self.cell_size)
+
+		border_thickness = 2
+		self.cell_size = min(
+			(self.map_display.width() - border_thickness * 2) // width,
+			(self.map_display.height() - border_thickness * 2) // height
+		)
+
+		pixmap = QPixmap(width * self.cell_size + border_thickness * 2, height * self.cell_size + border_thickness * 2)
 		pixmap.fill(Qt.white)
+
+		painter = QPainter(pixmap)
+		try:
+			# Draw border
+			pen = QPen(Qt.black, border_thickness)
+			painter.setPen(pen)
+			painter.drawRect(0, 0, pixmap.width() - 1, pixmap.height() - 1)
+		finally:
+			painter.end()
 		self.scene.addItem(QGraphicsPixmapItem(pixmap))
 
 	def display_seed_map(self):
 		self.scene.clear()
 		width = len(self.seeded_seeds[0])
 		height = len(self.seeded_seeds)
-		pixmap = QPixmap(width * self.cell_size, height * self.cell_size)
+		border_thickness = 2
+		pixmap = QPixmap(width * self.cell_size + border_thickness * 2, height * self.cell_size + border_thickness * 2)
 		pixmap.fill(Qt.white)
+
 		painter = QPainter(pixmap)
 		try:
+			# Draw tiles
 			for y in range(height):
 				for x in range(width):
 					tile_name = self.seeded_seeds[y][x]
@@ -1207,8 +1247,17 @@ class MapGenerator(QWidget):
 						tile_set = next((ts for ts in self.tile_sets if ts.name == tile_name), None)
 						if tile_set:
 							color = tile_set.color
-							painter.fillRect(x * self.cell_size, y * self.cell_size,
-											self.cell_size, self.cell_size, color)
+							painter.fillRect(
+								x * self.cell_size + border_thickness,
+								y * self.cell_size + border_thickness,
+								self.cell_size,
+								self.cell_size,
+								color
+							)
+			# Draw border
+			pen = QPen(Qt.black, border_thickness)
+			painter.setPen(pen)
+			painter.drawRect(0, 0, pixmap.width() - 1, pixmap.height() - 1)
 		finally:
 			painter.end()
 		self.scene.addItem(QGraphicsPixmapItem(pixmap))
