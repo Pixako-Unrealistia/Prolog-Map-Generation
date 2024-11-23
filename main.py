@@ -429,6 +429,7 @@ class MapGenerator(QWidget):
 		self.prolog.consult("map_rules3.pl")
 		self.prolog.consult("constraints.pl")
 		self.prolog.consult("pathfinding.pl")
+		#self.prolog.consult("wfc.pl")
 		
 		self.start_pos = None
 		self.end_pos = None
@@ -775,7 +776,7 @@ class MapGenerator(QWidget):
 			print(f"Normalised percentages: {percentages}")
 
 			self.fill_empty_tiles(map_data, percentages)
-			map_data = self.correct_map(map_data)
+			#map_data = self.correct_map(map_data)
 			self.current_map_data = map_data
 			self.redraw_map()
 		elif self.perlin_radio.isChecked():
@@ -835,15 +836,9 @@ class MapGenerator(QWidget):
 					# Try non-discoverable tiles
 					for border_tile in self.tile_sets:
 						if not border_tile.discoverable:
-							border_invalid = any(
-								neighbor in border_tile.cannot_be_next_to
-								for neighbor in neighbors
-							) or (
-								border_tile.must_be_next_to and not any(
-									neighbor in border_tile.must_be_next_to
-									for neighbor in neighbors
-								)
-							)
+							query_border = f"border_invalid('{border_tile.name}', {neighbors_str})"
+							result_border = list(self.prolog.query(query_border))
+							border_invalid = bool(result_border)
 							if not border_invalid:
 								corrected_map[y][x] = border_tile.name
 								suitable_tile_found = True
@@ -878,15 +873,9 @@ class MapGenerator(QWidget):
 						# Try non-discoverable tiles
 						for border_tile in self.tile_sets:
 							if not border_tile.discoverable:
-								border_invalid = any(
-									neighbor in border_tile.cannot_be_next_to
-									for neighbor in neighbors
-								) or (
-									border_tile.must_be_next_to and not any(
-										neighbor in border_tile.must_be_next_to
-										for neighbor in neighbors
-									)
-								)
+								query_border = f"border_invalid('{border_tile.name}', {neighbors_str})"
+								result_border = list(self.prolog.query(query_border))
+								border_invalid = bool(result_border)
 								if not border_invalid:
 									corrected_map[y][x] = border_tile.name
 									suitable_tile_found = True
