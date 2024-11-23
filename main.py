@@ -749,7 +749,6 @@ class MapGenerator(QWidget):
 		self.locked_tiles.clear()
 
 		if self.seeded_radio.isChecked():
-			# Initialize map with seeds and None for empty tiles
 			map_data = []
 			for y in range(height):
 				row = []
@@ -762,7 +761,21 @@ class MapGenerator(QWidget):
 				map_data.append(row)
 
 			# Fill empty tiles
+			# Create a list of current seeded tiles in the map_data
+			seeded_tiles = set(tile for row in map_data for tile in row if tile)
+			print(f"Seeded tiles: {seeded_tiles}")
+			#print(map_data)
+			for tile in seeded_tiles:
+				percentages[tile] = 0
+
+			#normalise the percentages that has value to combine into 100 in total
+			percentages = {name: value for name, value in percentages.items() if value > 0}
+			percentages_sum = sum(percentages.values())
+			percentages = {name: value / percentages_sum * 100 for name, value in percentages.items()}
+			print(f"Normalised percentages: {percentages}")
+
 			self.fill_empty_tiles(map_data, percentages)
+			map_data = self.correct_map(map_data)
 			self.current_map_data = map_data
 			self.redraw_map()
 		elif self.perlin_radio.isChecked():
