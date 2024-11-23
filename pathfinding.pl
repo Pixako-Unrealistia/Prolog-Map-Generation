@@ -23,11 +23,13 @@ find_path(Map, Start, Goal, Path) :-
     astar(OpenSet, Map, Goal, [], PathRev),
     reverse(PathRev, Path).
 
-% Heuristic function (Manhattan distance)
+% Heuristic function (Octile distance)
 heuristic(pos(X1, Y1), pos(X2, Y2), H) :-
-    DX is abs(X1 - X2),
-    DY is abs(Y1 - Y2),
-    H is DX + DY.
+    DX is abs(X2 - X1),
+    DY is abs(Y2 - Y1),
+    Dmin is min(DX, DY),
+    Dmax is max(DX, DY),
+    H is (1.4142 * Dmin) + (Dmax - Dmin).
 
 % Get tile at a position (adjusted for zero-based indexing)
 get_tile(Map, pos(X, Y), Tile) :-
@@ -48,13 +50,16 @@ within_map(Map, pos(X, Y)) :-
     length(Row, NumCols),
     X < NumCols.
 
-% Find neighboring positions (up, down, left, right)
+% Find neighboring positions (including diagonals)
 neighbors(Map, pos(X, Y), Neighbors) :-
     findall(pos(NX, NY),
-        (   (NX is X - 1, NX >= 0, NY = Y, within_map(Map, pos(NX, NY)));
-            (NX is X + 1, NY = Y, within_map(Map, pos(NX, NY)));
-            (NX = X, NY is Y - 1, NY >= 0, within_map(Map, pos(NX, NY)));
-            (NX = X, NY is Y + 1, within_map(Map, pos(NX, NY)))
+        (
+            between(-1, 1, DX),
+            between(-1, 1, DY),
+            (DX \= 0 ; DY \= 0),
+            NX is X + DX,
+            NY is Y + DY,
+            within_map(Map, pos(NX, NY))
         ),
         Neighbors).
 
@@ -75,7 +80,7 @@ astar(OpenSet, Map, Goal, ClosedSet, Path) :-
         astar(NewOpenSet, Map, Goal, [CurrentPos | ClosedSet], Path)
     ).
 
-% Expand current node
+% Expand current node with adjusted cost for diagonal movement
 expand_node(CurrentPos, G, CurrentPath, Map, Goal, ClosedSet, Children) :-
     neighbors(Map, CurrentPos, NeighborPositions),
     findall([NeighborPos, GNew, H, [NeighborPos | CurrentPath]],
@@ -83,12 +88,18 @@ expand_node(CurrentPos, G, CurrentPath, Map, Goal, ClosedSet, Children) :-
             member(NeighborPos, NeighborPositions),
             \+ member(NeighborPos, ClosedSet),
             get_tile(Map, NeighborPos, Tile),
-            tile_traversal_cost(Tile, Cost),
-            Cost > 0, % Ensure the tile is traversable
-            GNew is G + Cost,
+            tile_traversal_cost(Tile, TileCost),
+            movement_cost(CurrentPos, NeighborPos, MoveCost),
+            TotalCost is TileCost * MoveCost,
+            TotalCost > 0, % Ensure the tile is traversable
+            GNew is G + TotalCost,
             heuristic(NeighborPos, Goal, H)
         ),
         Children).
+
+% Determine movement cost (1 for orthogonal, 1.4142 for diagonal)
+movement_cost(pos(X1, Y1), pos(X2, Y2), Cost) :-
+    (   X1 \= X2, Y1 \= Y2 -> Cost is 1.4142 ; Cost is 1).
 
 % Add children to heap
 add_children_to_heap(OpenSet, [], OpenSet).
