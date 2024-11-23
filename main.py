@@ -776,7 +776,7 @@ class MapGenerator(QWidget):
 			print(f"Normalised percentages: {percentages}")
 
 			self.fill_empty_tiles(map_data, percentages)
-			#map_data = self.correct_map(map_data)
+			map_data = self.correct_map(map_data) # Ideally, this wouldn't be  needed
 			self.current_map_data = map_data
 			self.redraw_map()
 		elif self.perlin_radio.isChecked():
@@ -1318,6 +1318,41 @@ class MapGenerator(QWidget):
 	def fill_empty_tiles(self, map_data, percentages):
 		width = len(map_data[0])
 		height = len(map_data)
+		
+		# Create Prolog query for noise generation
+		query = f"generate_noise_map(0, {width}, {height}, NoiseMap)"
+		result = list(self.prolog.query(query))
+		
+		if result:
+			noise_map = result[0]['NoiseMap']
+			
+			tile_thresholds = []
+			acc = 0
+			for tile, percentage in percentages.items():
+				acc += percentage
+				tile_thresholds.append((tile, acc))
+			
+			for y in range(height):
+				for x in range(width):
+					if map_data[y][x] is not None:
+						continue
+						
+					noise_value = noise_map[y][x]
+					
+					for tile, threshold in tile_thresholds:
+						if noise_value <= threshold:
+							map_data[y][x] = tile
+							break
+						
+					if map_data[y][x] is None:
+						map_data[y][x] = list(percentages.keys())[0]
+		else:
+			print("Perlin noise generation failed, falling back to random")
+			self.random_fill_empty_tiles(map_data, percentages)
+
+	def random_fill_empty_tiles(self, map_data, percentages):
+		width = len(map_data[0])
+		height = len(map_data)
 		total_tiles = width * height
 
 		prefilled_counts = {}
@@ -1333,10 +1368,11 @@ class MapGenerator(QWidget):
 
 		tiles_to_fill = []
 		for tile, count in tile_counts.items():
-			tiles_to_fill.extend([tile] * count)
+			tiles_to_fill.extend([tile] * max(0, count))
 
 		random.shuffle(tiles_to_fill)
 
+		# Fill empty spaces
 		idx = 0
 		for y in range(height):
 			for x in range(width):
@@ -1344,50 +1380,81 @@ class MapGenerator(QWidget):
 					map_data[y][x] = tiles_to_fill[idx]
 					idx += 1
 
-	def propagate(self, wavefunction, x, y):
-		stack = [(x, y)]
-		width = len(wavefunction[0])
-		height = len(wavefunction)
-		while stack:
-			cx, cy = stack.pop()
-			tile = next(iter(wavefunction[cy][cx]))
-			neighbors = self.get_neighbors(cx, cy, width, height)
-			for nx, ny in neighbors:
-				possible_tiles = wavefunction[ny][nx]
-				allowed_tiles = set()
-				for candidate_tile in possible_tiles:
-					if self.are_tiles_compatible(tile, candidate_tile):
-						allowed_tiles.add(candidate_tile)
-				if allowed_tiles != possible_tiles:
-					wavefunction[ny][nx] = allowed_tiles
-					if len(allowed_tiles) == 0:
-						raise ValueError("No possible tiles left. Constraints are too strict.")
-					if len(allowed_tiles) == 1:
-						stack.append((nx, ny))
 
-	def get_neighbors(self, x, y, width, height):
-		neighbors = []
-		if x > 0:
-			neighbors.append((x - 1, y))
-		if x < width - 1:
-			neighbors.append((x + 1, y))
-		if y > 0:
-			neighbors.append((x, y - 1))
-		if y < height - 1:
-			neighbors.append((x, y + 1))
-		return neighbors
 
-	def are_tiles_compatible(self, tile1, tile2):
-		tile1_set = next((ts for ts in self.tile_sets if ts.name == tile1), None)
-		tile2_set = next((ts for ts in self.tile_sets if ts.name == tile2), None)
-		if tile1_set and tile2_set:
-			if tile2 in tile1_set.cannot_be_next_to or tile1 in tile2_set.cannot_be_next_to:
-				return False
-			if tile1_set.must_be_next_to and tile2 not in tile1_set.must_be_next_to:
-				return False
-			if tile2_set.must_be_next_to and tile1 not in tile2_set.must_be_next_to:
-				return False
-		return True
+	#def fill_empty_tiles(self, map_data, percentages):
+	#	width = len(map_data[0])
+	#	height = len(map_data)
+	#	total_tiles = width * height
+
+	#	prefilled_counts = {}
+	#	for row in map_data:
+	#		for cell in row:
+	#			if cell is not None:
+	#				prefilled_counts[cell] = prefilled_counts.get(cell, 0) + 1
+
+	#	tile_counts = {}
+	#	for tile, percentage in percentages.items():
+	#		count = int(round((percentage / 100.0) * total_tiles))
+	#		tile_counts[tile] = count - prefilled_counts.get(tile, 0)
+
+	#	tiles_to_fill = []
+	#	for tile, count in tile_counts.items():
+	#		tiles_to_fill.extend([tile] * count)
+
+	#	random.shuffle(tiles_to_fill)
+
+	#	idx = 0
+	#	for y in range(height):
+	#		for x in range(width):
+	#			if map_data[y][x] is None and idx < len(tiles_to_fill):
+	#				map_data[y][x] = tiles_to_fill[idx]
+	#				idx += 1
+
+	#def propagate(self, wavefunction, x, y):
+	#	stack = [(x, y)]
+	#	width = len(wavefunction[0])
+	#	height = len(wavefunction)
+	#	while stack:
+	#		cx, cy = stack.pop()
+	#		tile = next(iter(wavefunction[cy][cx]))
+	#		neighbors = self.get_neighbors(cx, cy, width, height)
+	#		for nx, ny in neighbors:
+	#			possible_tiles = wavefunction[ny][nx]
+	#			allowed_tiles = set()
+	#			for candidate_tile in possible_tiles:
+	#				if self.are_tiles_compatible(tile, candidate_tile):
+	#					allowed_tiles.add(candidate_tile)
+	#			if allowed_tiles != possible_tiles:
+	#				wavefunction[ny][nx] = allowed_tiles
+	#				if len(allowed_tiles) == 0:
+	#					raise ValueError("No possible tiles left. Constraints are too strict.")
+	#				if len(allowed_tiles) == 1:
+	#					stack.append((nx, ny))
+
+	#def get_neighbors(self, x, y, width, height):
+	#	neighbors = []
+	#	if x > 0:
+	#		neighbors.append((x - 1, y))
+	#	if x < width - 1:
+	#		neighbors.append((x + 1, y))
+	#	if y > 0:
+	#		neighbors.append((x, y - 1))
+	#	if y < height - 1:
+	#		neighbors.append((x, y + 1))
+	#	return neighbors
+
+	#def are_tiles_compatible(self, tile1, tile2):
+	#	tile1_set = next((ts for ts in self.tile_sets if ts.name == tile1), None)
+	#	tile2_set = next((ts for ts in self.tile_sets if ts.name == tile2), None)
+	#	if tile1_set and tile2_set:
+	#		if tile2 in tile1_set.cannot_be_next_to or tile1 in tile2_set.cannot_be_next_to:
+	#			return False
+	#		if tile1_set.must_be_next_to and tile2 not in tile1_set.must_be_next_to:
+	#			return False
+	#		if tile2_set.must_be_next_to and tile1 not in tile2_set.must_be_next_to:
+	#			return False
+	#	return True
 
 if __name__ == '__main__':
 	app = QApplication(sys.argv)
